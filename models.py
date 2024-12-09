@@ -22,10 +22,10 @@ def abstract_pair_data(data, z_emb_pair=None):
             pair_data[key[5:]] = data[key]
     return pair_data
 
-class GCNGraphormer(torch.nn.Module):
+class SANGraphormer(torch.nn.Module):
     def __init__(self, args, hidden_channels, num_layers, max_z, train_dataset, net_params,
                  use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.2):
-        super(GCNGraphormer, self).__init__()
+        super(SANGraphormer, self).__init__()
 
         # Original params
         self.use_feature = use_feature
@@ -93,7 +93,6 @@ class GCNGraphormer(torch.nn.Module):
         # Output layers
         self.lin1 = Linear(2 * hidden_channels, hidden_channels)
         self.lin2 = Linear(hidden_channels, 1)
-        self.dropout = dropout
 
     def reset_parameters(self):
         for layer in self.layers:
@@ -101,6 +100,15 @@ class GCNGraphormer(torch.nn.Module):
         self.graphormer.reset_parameters()
 
     def forward(self, data):
+
+        # Validation
+        device = next(self.parameters()).device
+        if device != data.x.device:
+             raise ValueError('Data and model on different devices!')
+
+        if data.x.dim() < 2 or data.x.size(1) < 2:
+            raise ValueError(f"Input features must have at least 2 dimensions with shape [N, 2+], got {data.x.shape}")
+
         #only use first entry of features as x
         x = data.x[:,0]
         #use rest as timestamp
@@ -110,7 +118,6 @@ class GCNGraphormer(torch.nn.Module):
         batch = data.batch
         edge_weight = data.edge_weight
         node_id = data.node_id
-
 
         z_emb = self.z_embedding(z)
         x_emb = self.x_embedding(x)
@@ -130,13 +137,123 @@ class GCNGraphormer(torch.nn.Module):
             x_rpe_emb = self.trainable_embedding(x_rpe).view(x_rpe.shape[0], -1)
             h = torch.cat([h, x_rpe_emb], 1)
 
-        # SAN Layers, requiring DGL graph, AND CHECK YOU HAVE CORRECT DEVICE
-        g = pyg_to_dgl(data, self.full_graph)
-        e = g.edata['feat'].flatten().long() # See SAN train_SBMs_node_classification.py
+        try:
+            # DGL conversion
+            g = pyg_to_dgl(data, self.full_graph, device)
+        except:
+            raise RuntimeError(f"Error during DGL conversion: {str(e)}")
+
+        e = g.edata['feat'].flatten().long().to(device) # See SAN train_SBMs_node_classification.py
         e = self.e_embedding(e)
         for layer in self.layers:
             h, e = layer(g, h, e)
         
+        if True:  # center pooling
+            _, center_indices = np.unique(batch.cpu().numpy(), return_index=True)
+            h_src = h[center_indices]
+            h_dst = h[center_indices + 1]
+            h = h_src * h_dst
+            if self.use_feature_GT:
+                pair_data = abstract_pair_data(data)
+            else:
+                z_emb_src = z_emb[center_indices]
+                z_emb_dst = z_emb[center_indices + 1]
+                z_emb_pair = torch.cat([z_emb_src.unsqueeze(1), z_emb_dst.unsqueeze(1)], dim=1)
+                pair_data = abstract_pair_data(data, z_emb_pair)  # 不用feature，就用z_emb替代
+            h_graphormer = self.graphormer(pair_data)
+            h_src_graphormer = h_graphormer[:, 0, :]
+            h_dst_graphormer = h_graphormer[:, 1, :]
+            h_graphormer = h_src_graphormer * h_dst_graphormer
+        else:  # sum pooling
+            h = global_add_pool(h, batch)
+        h = torch.cat((h, h_graphormer), dim=-1)
+        h = F.relu(self.lin1(h))
+        h = F.dropout(h, p=self.dropout, training=self.training)
+        h = self.lin2(h)
+
+        return h
+    
+class GCNGraphormer(torch.nn.Module):
+    def __init__(self, args, hidden_channels, num_layers, max_z, train_dataset,
+                 use_feature=False, use_feature_GT=True, node_embedding=None, dropout=0.5):
+        super(GCNGraphormer, self).__init__()
+        self.use_feature = use_feature
+        self.use_feature_GT = use_feature_GT
+        self.node_embedding = node_embedding
+        self.max_z = max_z
+        self.z_embedding = Embedding(self.max_z, hidden_channels)
+        self.use_rpe = args.use_rpe
+        self.num_step = args.num_step
+        self.rpe_hidden_dim = args.rpe_hidden_dim
+
+        self.convs = ModuleList()
+        initial_channels = hidden_channels
+        if self.use_feature:
+            initial_channels += train_dataset.num_features
+        if self.node_embedding is not None:
+            initial_channels += node_embedding.embedding_dim
+        if self.use_rpe:
+            initial_channels += self.rpe_hidden_dim * 2
+            self.trainable_embedding = Sequential(Linear(in_features=self.num_step, out_features=self.rpe_hidden_dim), ReLU(), Linear(in_features=self.rpe_hidden_dim, out_features=self.rpe_hidden_dim))
+
+        self.convs.append(GCNConv(initial_channels, hidden_channels))
+        for _ in range(num_layers - 1):
+            self.convs.append(GCNConv(hidden_channels, hidden_channels))
+        self.dropout = dropout
+        self.lin1 = Linear(2 * hidden_channels, hidden_channels)
+        self.lin2 = Linear(hidden_channels, 1)
+
+        # 不用feature，就用z_emb代替，维度就是hidden_channels
+        input_dim = train_dataset.num_features if use_feature_GT else hidden_channels
+        self.graphormer = Graphormer(n_layers=3,
+                                     input_dim=input_dim,
+                                     num_heads=args.num_heads,
+                                     hidden_dim=hidden_channels,
+                                     ffn_dim=hidden_channels,
+                                     grpe_cross=args.grpe_cross,
+                                     use_len_spd=args.use_len_spd,
+                                     use_num_spd=args.use_num_spd,
+                                     use_cnb_jac=args.use_cnb_jac,
+                                     use_cnb_aa=args.use_cnb_aa,
+                                     use_cnb_ra=args.use_cnb_ra,
+                                     use_degree=args.use_degree,
+                                     mul_bias=args.mul_bias,
+                                     gravity_type=args.gravity_type)
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        self.graphormer.reset_parameters()
+
+    def forward(self, data):
+        x = data.x
+        z = data.z
+        edge_index = data.edge_index
+        batch = data.batch
+        edge_weight = data.edge_weight
+        node_id = data.node_id
+
+        z_emb = self.z_embedding(z)
+        if z_emb.ndim == 3:  # in case z has multiple integer labels
+            z_emb = z_emb.sum(dim=1)
+        if self.use_feature and x is not None:
+            h = torch.cat([z_emb, x.to(torch.float)], 1)
+        else:
+            h = z_emb
+        if self.node_embedding is not None and node_id is not None:
+            n_emb = self.node_embedding(node_id)
+            h = torch.cat([h, n_emb], 1)
+        if self.use_rpe:
+            x_rpe = data.x_rpe
+            x_rpe_emb = self.trainable_embedding(x_rpe).view(x_rpe.shape[0], -1)
+            h = torch.cat([h, x_rpe_emb], 1)
+
+        for conv in self.convs[:-1]:
+            h = conv(h, edge_index, edge_weight)
+            h = F.relu(h)
+            h = F.dropout(h, p=self.dropout, training=self.training)
+        h = self.convs[-1](h, edge_index, edge_weight)
+
         if True:  # center pooling
             _, center_indices = np.unique(batch.cpu().numpy(), return_index=True)
             h_src = h[center_indices]

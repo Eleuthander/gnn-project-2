@@ -1,0 +1,18 @@
+--find-links https://data.dgl.ai/wheels/torch-2.4/cu121/repo.html
+dgl==2.4
+
+--find-links https://download.pytorch.org/whl/cu121
+torch==2.4.0
+torchvision==0.19.0
+torchaudio==2.4.0
+
+--find-links https://data.pyg.org/whl/torch-2.5.1+cu121.html
+torch_geometric==2.5.1
+
+# Optional dependencies
+--find-links https://data.pyg.org/whl/torch-2.5.0+cu121.html
+pyg_lib
+torch_scatter
+torch_sparse
+torch_cluster
+torch_spline_conv
