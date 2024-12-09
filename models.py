@@ -17,14 +17,15 @@ def abstract_pair_data(data, z_emb_pair=None):
         pair_data = Data(x=data.pair_x, z=data.pair_z, edge_index=data.pair_edge_idx)
     else:  # 传入z_emb，就用z_emb替代feature
         pair_data = Data(x=z_emb_pair, z=data.pair_z, edge_index=data.pair_edge_idx)
-    for key in data.keys:
+    for key in data.keys():
         if key.startswith('pair_') and key not in ['pair_x', 'pair_z', 'pair_edge_idx']:
             pair_data[key[5:]] = data[key]
     return pair_data
 
 class SANGraphormer(torch.nn.Module):
-    def __init__(self, args, hidden_channels, num_layers, max_z, train_dataset, net_params,
-                 use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.2):
+    def __init__(self, args, hidden_channels, num_layers, max_z, num_features, net_params,
+                 use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.1,
+                 GT_n_heads=4, full_graph=False, gamma=1e-5):
         super(SANGraphormer, self).__init__()
 
         # Original params
@@ -39,9 +40,9 @@ class SANGraphormer(torch.nn.Module):
         self.net_params = net_params
 
         # SAN params
-        GT_n_heads = net_params['GT_n_heads']
-        self.full_graph = net_params['full_graph']
-        self.gamma = net_params['gamma']
+        self.GT_n_heads = GT_n_heads
+        self.full_graph = full_graph
+        self.gamma = gamma
         self.dropout = dropout
 
         # Calculate initial SAN dimension including timestamp
@@ -49,7 +50,7 @@ class SANGraphormer(torch.nn.Module):
         if self.use_feature:
             initial_channels += hidden_channels # For first entry in feature vector
         if self.use_time_feature:
-            initial_channels += train_dataset.num_features - 1 # For timestamps, i.e. rest of feature vector
+            initial_channels += num_features - 1 # For timestamps, i.e. rest of feature vector
         if self.node_embedding is not None:
             initial_channels += node_embedding.embedding_dim
         if self.use_rpe:
@@ -74,7 +75,7 @@ class SANGraphormer(torch.nn.Module):
         ))
 
         # Graphormer layer
-        input_dim = train_dataset.num_features if use_feature_GT else hidden_channels
+        input_dim = num_features if use_feature_GT else hidden_channels
         self.graphormer = Graphormer(n_layers=3,
                                      input_dim=input_dim,
                                      num_heads=args.num_heads,
@@ -174,7 +175,7 @@ class SANGraphormer(torch.nn.Module):
         return h
     
 class GCNGraphormer(torch.nn.Module):
-    def __init__(self, args, hidden_channels, num_layers, max_z, train_dataset,
+    def __init__(self, args, hidden_channels, num_layers, max_z, num_features,
                  use_feature=False, use_feature_GT=True, node_embedding=None, dropout=0.5):
         super(GCNGraphormer, self).__init__()
         self.use_feature = use_feature
@@ -189,7 +190,7 @@ class GCNGraphormer(torch.nn.Module):
         self.convs = ModuleList()
         initial_channels = hidden_channels
         if self.use_feature:
-            initial_channels += train_dataset.num_features
+            initial_channels += num_features
         if self.node_embedding is not None:
             initial_channels += node_embedding.embedding_dim
         if self.use_rpe:
@@ -204,7 +205,7 @@ class GCNGraphormer(torch.nn.Module):
         self.lin2 = Linear(hidden_channels, 1)
 
         # 不用feature，就用z_emb代替，维度就是hidden_channels
-        input_dim = train_dataset.num_features if use_feature_GT else hidden_channels
+        input_dim = num_features if use_feature_GT else hidden_channels
         self.graphormer = Graphormer(n_layers=3,
                                      input_dim=input_dim,
                                      num_heads=args.num_heads,

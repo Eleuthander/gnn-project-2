@@ -25,8 +25,6 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.data import Data, Dataset, InMemoryDataset, DataLoader
 from torch_geometric.utils import to_networkx, to_undirected
 
-from ogb.linkproppred import PygLinkPropPredDataset, Evaluator
-
 import warnings
 from scipy.sparse import SparseEfficiencyWarning
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
