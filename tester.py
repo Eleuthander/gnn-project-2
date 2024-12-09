@@ -28,11 +28,11 @@ args = SimpleNamespace(
 
     # Model args
     model = 'GCNGraphormer',
-    hidden_channels=32, # transformer block dims (64-128 reasonable) \ embedding dim in GCN (32 reasonable)
+    hidden_channels=64, # transformer block dims (64-128 reasonable) \ embedding dim in GCN (32 reasonable)
     num_layers=3,
     dropout=0.2,
     full_graph=True, # whether to add fake edges to SAN
-    gamma=1e-1, # between 0 and 1:  0 is fully sparse, 1 fully (10e-7 through 1-05 reasonable)
+    gamma=1e-6, # between 0 and 1:  0 is fully sparse, 1 fully (10e-7 through 1-05 reasonable)
     GT_n_heads = 4, # Num heads for SAN module (4-8 reasonable)
     num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
@@ -42,7 +42,7 @@ args = SimpleNamespace(
     max_z=1000,  # Max value for structural encoding
 
     #Batching args
-    batch_size=512,
+    batch_size=128,
     num_workers=12,
     pin_memory=True,
     prefetch_factor=4,
@@ -114,7 +114,7 @@ if args.num_workers > 0:
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=args.pin_memory,
-        prefetch_factor=args.prefetch_factor
+        prefetch_factor=args.prefetch_factor,
         persistent_workers=args.persistent_workers
     )
 else:
@@ -208,14 +208,22 @@ def evaluate_model(model, test_loader, device, monitor_interval=5):
     monitor = ResourceMonitor(pbar, interval=monitor_interval)
     monitor.start()
     
+    # Calculate next batch on CPU as GPU processes this batch
+    # try:
+    #     with autocast(), torch.no_grad():
+    #         for batch in pbar:
+    #             batch = batch.to(device, non_blocking=True)  # Enable async transfer
+    #             pred = model(batch)
+    #             all_preds.append(pred.cpu())
+
+    #             # Clear GPU memory
+    #             del batch
+    #             del pred
+    #             torch.cuda.empty_cache()
+
     try:
-        with autocast(), torch.no_grad():
+        with torch.no_grad():
             for batch in pbar:
-                
-                # Prefetch next batch while processing current
-                torch.cuda.current_stream().wait_stream(torch.cuda.Stream())
-                with torch.cuda.stream(torch.cuda.Stream()):
-                    next_batch = next(iter(test_loader))
                 batch = batch.to(device)
                 pred = model(batch)
                 all_preds.append(pred.cpu())
