@@ -23,7 +23,7 @@ def abstract_pair_data(data, z_emb_pair=None):
     return pair_data
 
 class SANGraphormer(torch.nn.Module):
-    def __init__(self, args, hidden_channels, num_layers, max_z, num_features, net_params,
+    def __init__(self, args, hidden_channels, num_layers, max_z, num_features,
                  use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.1,
                  GT_n_heads=4, full_graph=False, gamma=1e-5):
         super(SANGraphormer, self).__init__()
@@ -37,7 +37,6 @@ class SANGraphormer(torch.nn.Module):
         self.use_rpe = args.use_rpe
         self.num_step = args.num_step
         self.rpe_hidden_dim = args.rpe_hidden_dim
-        self.net_params = net_params
 
         # SAN params
         self.GT_n_heads = GT_n_heads
@@ -145,7 +144,7 @@ class SANGraphormer(torch.nn.Module):
             raise RuntimeError(f"Error during DGL conversion: {str(e)}")
 
         e = g.edata['feat'].flatten().long().to(device) # See SAN train_SBMs_node_classification.py
-        e = self.e_embedding(e)
+        e = self.e_embedding(e).to(device)
         for layer in self.layers:
             h, e = layer(g, h, e)
         

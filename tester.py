@@ -6,10 +6,13 @@ from models import GCNGraphormer, SANGraphormer
 import argparse
 from types import SimpleNamespace
 from preprocess import preprocess
+from usage_monitoring import ResourceMonitor
 import time
 from functools import partial
 from tqdm import tqdm
 import sys
+from torch.cuda.amp import autocast # for preprocessing
+import gc
 
 #Suppress annoying torch.load warning
 import warnings
@@ -39,14 +42,16 @@ args = SimpleNamespace(
     max_z=1000,  # Max value for structural encoding
 
     #Batching args
-    batch_size=256,
-    num_workers=6,
+    batch_size=512,
+    num_workers=12,
     pin_memory=True,
-    prefetch_factor=2,
+    prefetch_factor=4,
+    persistent_workers=True,
     sample_type = 2, # 0 is standard; 2 is "k_hop_subgraph_sampler_tensor"
 
     # Features used
     use_feature=True, # whether to use features in the GNN
+    use_time_feature=True, # whether to use timestamps as positional encodings
     use_feature_GT=True, # whether to use features in the graphormer module
     use_edge_weight=False,
     grpe_cross=False,
@@ -110,6 +115,7 @@ if args.num_workers > 0:
         num_workers=args.num_workers,
         pin_memory=args.pin_memory,
         prefetch_factor=args.prefetch_factor
+        persistent_workers=args.persistent_workers
     )
 else:
     test_loader = PygDataLoader(
@@ -167,7 +173,7 @@ if args.model == 'GCNGraphormer':
         dropout=args.dropout
     ).to(device)
 elif args.model == 'SANGraphormer':
-    model = GCNGraphormer(
+    model = SANGraphormer(
         args=args,
         hidden_channels=args.hidden_channels,
         num_layers=args.num_layers,
@@ -175,6 +181,7 @@ elif args.model == 'SANGraphormer':
         num_features=data.x.size(1),
         use_feature=args.use_feature,
         use_feature_GT=args.use_feature_GT,
+        use_time_feature=args.use_time_feature,
         node_embedding=None,
         dropout=args.dropout,
         GT_n_heads=args.GT_n_heads,
@@ -187,61 +194,6 @@ else:
 print("Created Model")
 
 # Evaluate
-
-import psutil
-import torch
-from tqdm import tqdm
-import time
-from threading import Thread
-import GPUtil
-
-class ResourceMonitor:
-    def __init__(self, progress_bar, interval=5):
-        """
-        Initialize resource monitor
-        Args:
-            progress_bar (tqdm): tqdm progress bar to update
-            interval (int): Monitoring interval in seconds
-        """
-        self.interval = interval
-        self.running = False
-        self.thread = None
-        self.progress_bar = progress_bar
-        
-    def get_gpu_usage(self):
-        """Get GPU utilization if available"""
-        try:
-            gpu = GPUtil.getGPUs()[0]  # Assuming first GPU
-            return f"GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}%"
-        except:
-            return "GPU stats N/A"
-    
-    def get_cpu_usage(self):
-        """Get CPU utilization"""
-        cpu_percent = psutil.cpu_percent()
-        memory = psutil.virtual_memory()
-        return f"CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%"
-    
-    def monitor(self):
-        """Main monitoring loop"""
-        while self.running:
-            gpu_stats = self.get_gpu_usage()
-            cpu_stats = self.get_cpu_usage()
-            self.progress_bar.set_postfix_str(f"{gpu_stats} | {cpu_stats}")
-            time.sleep(self.interval)
-    
-    def start(self):
-        """Start monitoring in background thread"""
-        self.running = True
-        self.thread = Thread(target=self.monitor, daemon=True)
-        self.thread.start()
-    
-    def stop(self):
-        """Stop monitoring"""
-        self.running = False
-        if self.thread:
-            self.thread.join()
-
 def evaluate_model(model, test_loader, device, monitor_interval=5):
     """
     Evaluate model with resource monitoring
@@ -249,25 +201,43 @@ def evaluate_model(model, test_loader, device, monitor_interval=5):
     model.eval()
     all_preds = []
 
-    # Create progress bar first
-    pbar = tqdm(test_loader, desc="Evaluating", ncols=120)  # Increased ncols to accommodate stats
+    # Create progress bar
+    pbar = tqdm(test_loader, desc="Evaluating", ncols=120)
     
     # Initialize and start resource monitor with progress bar
     monitor = ResourceMonitor(pbar, interval=monitor_interval)
     monitor.start()
     
     try:
-        with torch.no_grad():
+        with autocast(), torch.no_grad():
             for batch in pbar:
+                
+                # Prefetch next batch while processing current
+                torch.cuda.current_stream().wait_stream(torch.cuda.Stream())
+                with torch.cuda.stream(torch.cuda.Stream()):
+                    next_batch = next(iter(test_loader))
                 batch = batch.to(device)
                 pred = model(batch)
                 all_preds.append(pred.cpu())
+
+                # Clear GPU memory
+                del batch
+                del pred
+                torch.cuda.empty_cache()  # Clear any remaining GPU memory
+                
+                # Optional: force garbage collection; can slow things down
+                # gc.collect()
+
     except KeyboardInterrupt:
         print("\nEvaluation interrupted by user")
     finally:
         # Always stop monitoring
         monitor.stop()
         pbar.close()
+
+        # Final cleanup
+        torch.cuda.empty_cache()
+        gc.collect()
     
     if all_preds:
         all_preds = torch.cat(all_preds, dim=0)
