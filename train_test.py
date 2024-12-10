@@ -113,9 +113,8 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
     monitor.start()
 
     try:
-        for batch in pbar:
+        for i, batch in enumerate(pbar):
             batch = batch.to(device)
-
             optimizer.zero_grad()
             
             if scaler is not None:
@@ -123,16 +122,25 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
                     out = model(batch)
                     loss = criterion(out, batch.y.float())
                 scaler.scale(loss).backward()
+                
+                # Unscale before measuring gradients
+                scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf'))  # Just measure
+                
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                with autocast():
-                    out = model(batch)
-                    loss = criterion(out, batch.y.float())
+                out = model(batch)
+                loss = criterion(out, batch.y.float())
                 loss.backward()
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf'))  # Just measure
                 optimizer.step()
             
-            # Step the scheduler per batch
+            # Log gradient norm periodically
+            if i % 100 == 0:  # Every 100 batches
+                logging.info(f"Batch {i}, Gradient norm: {grad_norm:.4f}")
+
+            # Step scheduler per batch
             scheduler.step()
 
             total_loss += loss.item()
@@ -141,12 +149,12 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
             labels = batch.y.detach().cpu()
             all_preds.append(preds)
             all_labels.append(labels)
-            
-            # Update progress bar postfix with loss and resource usage
+
+            # Update progress bar
             current_loss = total_loss / (len(all_preds))
             pbar.set_postfix({'loss': f"{current_loss:.4f}"})
 
-            # Clear GPU memory
+            # Memory cleanup
             del batch
             del out
             torch.cuda.empty_cache()
@@ -154,11 +162,8 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
     except KeyboardInterrupt:
         logging.info("Training interrupted by user")
     finally:
-        # Always stop monitoring
         monitor.stop()
         pbar.close()
-
-        # Final cleanup
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -357,10 +362,13 @@ def main():
         num_step = 1,
 
         # Training args
-        learning_rate=0.001,
+        initial_lr=0.001,
+        min_lr=1e-6,
+        warmup_iterations=100,
+        T_0=10,
         weight_decay=5e-4,
-        num_epochs=100,
-        early_stopping_patience=10,  # Number of epochs to wait for improvement
+        num_epochs=5,
+        early_stopping_patience=3,  # Number of epochs to wait for improvement
     )
 
     # Create splits
@@ -379,8 +387,7 @@ def main():
         val_edge_weight = torch.ones([val_edge_index.size(1), 1], dtype=data.edge_weight.dtype, device=data.edge_weight.device)
         data.edge_weight = torch.cat([data.edge_weight, val_edge_weight], dim=0)
     else:
-        val_edge_weight = torch.ones([val_edge_index.size(1), 1], dtype=torch.float)
-        data.edge_weight = val_edge_weight
+        data.edge_weight = torch.ones([data.edge_index.size(1), 1], dtype=torch.float)
     logging.info("Included validation edges into training edges.")
 
     # Determine preprocessing function
@@ -546,15 +553,32 @@ def main():
 
     # Define loss and optimizer
     criterion = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.initial_lr, weight_decay=args.weight_decay)
     scaler = GradScaler() if device.type == 'cuda' else None
 
     # Initialize Learning Rate Scheduler (Per Batch)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=2)
-    logging.info("Initialized CosineAnnealingWarmRestarts scheduler with T_0=2")
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer, 
+        start_factor=0.1,
+        end_factor=1.0, 
+        total_iters=args.warmup_iterations,
+    )
+    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, 
+        T_0=5,
+        eta_min=args.min_lr
+    )
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[5]
+    )
+    logging.info("Initialized sequential scheduler with warmup and cosine annealing")
 
     # Training loop with validation and early stopping
+    best_val_metric = 0
     best_val_auc = 0
+    best_val_ap = 0
     best_epoch = -1
     patience_counter = 0
 
@@ -570,20 +594,20 @@ def main():
         logging.info(f"Validation Loss: {val_loss:.4f}, AUC: {val_auc:.4f}, AP: {val_ap:.4f}")
 
         # Check for improvement
-        if val_auc > best_val_auc:
-            best_val_auc = val_auc
+        current_metric = val_auc * 0.6 + val_ap * 0.4
+        if current_metric > best_val_metric:
+            best_val_metric = current_metric
             best_epoch = epoch
             patience_counter = 0
-            # Save the best model
             torch.save(model.state_dict(), 'best_model.pth')
-            logging.info(f"New best model saved at epoch {epoch} with AUC: {val_auc:.4f}")
+            logging.info(f"New best model saved at epoch {epoch} with combined metric: {current_metric:.4f} (AUC: {val_auc:.4f}, AP: {val_ap:.4f})")
         else:
             patience_counter += 1
-            logging.info(f"No improvement in AUC for {patience_counter} epoch(s)")
+            logging.info(f"No improvement for {patience_counter} epoch(s)")
 
         # Early stopping
         if patience_counter >= args.early_stopping_patience:
-            logging.info(f"Early stopping triggered. Best epoch: {best_epoch} with AUC: {best_val_auc:.4f}")
+            logging.info(f"Early stopping triggered. Best epoch: {best_epoch} with combined metric: {best_val_metric:.4f} (AUC: {best_val_auc:.4f}, AP: {best_val_ap:.4f})")
             break
 
     # Load the best model
