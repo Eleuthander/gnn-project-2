@@ -59,19 +59,16 @@ class SANGraphormer(torch.nn.Module):
         #Embeddings
         self.z_embedding = Embedding(self.max_z, hidden_channels)
         self.x_embedding = Embedding(371, hidden_channels) # Hard coded the max number for court features since annoying
-        self.e_embedding = Embedding(2, initial_channels)  # For edge features
+        self.e_embedding = Embedding(2, hidden_channels)  # For edge features
+        self.h_embedding = Linear(initial_channels, hidden_channels) # To reshape h to hidden channels
        
         # SAN Layers
         self.layers = ModuleList([
             GraphTransformerLayer(
-                self.gamma, initial_channels, hidden_channels, 
+                self.gamma, hidden_channels, hidden_channels, 
                 GT_n_heads, self.full_graph, dropout
             ) for _ in range(num_layers-1)
         ])
-        self.layers.append(GraphTransformerLayer(
-            self.gamma, hidden_channels, hidden_channels,
-            GT_n_heads, self.full_graph, dropout
-        ))
 
         # Graphormer layer
         input_dim = num_features if use_feature_GT else hidden_channels
@@ -110,9 +107,9 @@ class SANGraphormer(torch.nn.Module):
             raise ValueError(f"Input features must have at least 2 dimensions with shape [N, 2+], got {data.x.shape}")
 
         #only use first entry of features as x
-        x = data.x[:,0]
+        x = data.x[:,0].long()
         #use rest as timestamp
-        t = data.x[:,1:]
+        t = data.x[:,1:].long()
         z = data.z
         edge_index = data.edge_index
         batch = data.batch
@@ -145,6 +142,7 @@ class SANGraphormer(torch.nn.Module):
 
         e = g.edata['feat'].flatten().long().to(device) # See SAN train_SBMs_node_classification.py
         e = self.e_embedding(e).to(device)
+        h = self.h_embedding(h)
         for layer in self.layers:
             h, e = layer(g, h, e)
         

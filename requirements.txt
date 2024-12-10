@@ -1,3 +1,5 @@
+GPUtil
+
 --find-links https://data.dgl.ai/wheels/torch-2.4/cu121/repo.html
 dgl==2.4
 

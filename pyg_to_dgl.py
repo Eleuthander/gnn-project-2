@@ -45,8 +45,8 @@ def pyg_to_dgl(data, full_graph, device):
 
         # Remove self loops
         no_self_loops_mask = src_all != dst_all
-        src_all = src_all[no_self_loops_mask].clone()
-        dst_all = dst_all[no_self_loops_mask].clone()
+        src_all = src_all[no_self_loops_mask]
+        dst_all = dst_all[no_self_loops_mask]
         num_edges = num_edges - num_nodes
 
         # Create the DGL graph

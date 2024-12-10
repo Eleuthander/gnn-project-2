@@ -1,0 +1,876 @@
+Starting configuration search...
+Time: 2024-12-10 04:53:11
+
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 466
+Iterations per second: 7.76
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 301
+Iterations per second: 5.01
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 603
+Iterations per second: 10.04
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 600
+Iterations per second: 9.98
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 440
+Iterations per second: 7.32
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 642
+Iterations per second: 10.70
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 629
+Iterations per second: 10.48
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 512
+Iterations per second: 8.52
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 638
+Iterations per second: 10.63
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 605
+Iterations per second: 10.08
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 550
+Iterations per second: 9.16
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 640
+Iterations per second: 10.66
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 628
+Iterations per second: 10.46
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 625
+Iterations per second: 10.40
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 633
+Iterations per second: 10.54
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 626
+Iterations per second: 10.42
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 620
+Iterations per second: 10.32
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 8
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 625
+Iterations per second: 10.41
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 604
+Iterations per second: 10.05
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 548
+Iterations per second: 9.12
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 628
+Iterations per second: 10.46
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 617
+Iterations per second: 10.27
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 584
+Iterations per second: 9.73
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 614
+Iterations per second: 10.22
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 602
+Iterations per second: 10.02
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 592
+Iterations per second: 9.85
+
+Benchmarking configuration:
+Batch size: 64
+Num workers: 12
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 603
+Iterations per second: 10.03
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 458
+Iterations per second: 7.62
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 401
+Iterations per second: 6.66
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 454
+Iterations per second: 7.57
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 532
+Iterations per second: 8.86
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 459
+Iterations per second: 7.64
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 529
+Iterations per second: 8.81
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 524
+Iterations per second: 8.73
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 524
+Iterations per second: 8.72
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 4
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 527
+Iterations per second: 8.78
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 513
+Iterations per second: 8.54
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 493
+Iterations per second: 8.21
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 517
+Iterations per second: 8.61
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 517
+Iterations per second: 8.61
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 497
+Iterations per second: 8.27
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 516
+Iterations per second: 8.60
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 502
+Iterations per second: 8.35
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 506
+Iterations per second: 8.42
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 8
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 503
+Iterations per second: 8.38
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 511
+Iterations per second: 8.51
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 491
+Iterations per second: 8.18
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 511
+Iterations per second: 8.51
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 508
+Iterations per second: 8.46
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 500
+Iterations per second: 8.33
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 509
+Iterations per second: 8.47
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 487
+Iterations per second: 8.11
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 484
+Iterations per second: 8.06
+
+Benchmarking configuration:
+Batch size: 128
+Num workers: 12
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 485
+Iterations per second: 8.07
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 362
+Iterations per second: 5.99
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 356
+Iterations per second: 5.89
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 366
+Iterations per second: 5.97
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 366
+Iterations per second: 6.07
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 360
+Iterations per second: 5.78
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 373
+Iterations per second: 6.19
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 371
+Iterations per second: 6.06
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 360
+Iterations per second: 5.86
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 4
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 377
+Iterations per second: 6.28
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 355
+Iterations per second: 5.91
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 326
+Iterations per second: 5.43
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 355
+Iterations per second: 5.91
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 366
+Iterations per second: 6.09
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 345
+Iterations per second: 5.71
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 367
+Iterations per second: 6.11
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 353
+Iterations per second: 5.87
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 353
+Iterations per second: 5.88
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 8
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 355
+Iterations per second: 5.91
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 370
+Iterations per second: 6.16
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 359
+Iterations per second: 5.97
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 370
+Iterations per second: 6.16
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 362
+Iterations per second: 6.03
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 351
+Iterations per second: 5.84
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 362
+Iterations per second: 6.03
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 345
+Iterations per second: 5.74
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 333
+Iterations per second: 5.55
+
+Benchmarking configuration:
+Batch size: 256
+Num workers: 12
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 342
+Iterations per second: 5.69
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.72
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 204
+Iterations per second: 3.13
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 204
+Iterations per second: 3.34
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.66
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.71
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.68
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.68
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.68
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 4
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.68
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.96
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.92
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.97
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.91
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.83
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.86
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.73
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.70
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 8
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.70
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 2
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.83
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 2
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.82
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 2
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.85
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 4
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.75
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 4
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.72
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 4
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.72
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 8
+Sample type: 0
+Iterations completed: 206
+Iterations per second: 3.47
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 8
+Sample type: 1
+Iterations completed: 206
+Iterations per second: 3.48
+
+Benchmarking configuration:
+Batch size: 512
+Num workers: 12
+Prefetch factor: 8
+Sample type: 2
+Iterations completed: 206
+Iterations per second: 3.47
+
+==================================================
+Best configuration found:
+Batch size: 64
+Num workers: 4
+Prefetch factor: 4
+Sample type: 2
+Iterations per second: 10.70
+==================================================
