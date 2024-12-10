@@ -25,14 +25,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Create default args for GCNGraphormer
 args = SimpleNamespace(
+    
+    #Training args
+    runs = 1,
+    epochs = 2,
 
     # Model args
     model = 'GCNGraphormer',
     hidden_channels=64, # transformer block dims (64-128 reasonable) \ embedding dim in GCN (32 reasonable)
-    num_layers=3,
+    num_layers=6, # number of GNN module layers (6 reasonable for SAN, 3 for GCN)
     dropout=0.2,
     full_graph=True, # whether to add fake edges to SAN
-    gamma=1e-6, # between 0 and 1:  0 is fully sparse, 1 fully (10e-7 through 1-05 reasonable)
+    gamma=1e-5, # between 0 and 1:  0 is fully sparse, 1 fully (10e-7 through 1-05 reasonable)
     GT_n_heads = 4, # Num heads for SAN module (4-8 reasonable)
     num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
@@ -251,8 +255,12 @@ def evaluate_model(model, test_loader, device, monitor_interval=5):
         all_preds = torch.cat(all_preds, dim=0)
     return all_preds
 
+print("Starting training...")
 
-print("Evaluating Model")
-all_preds = evaluate_model(model, test_loader, device, monitor_interval=5)
+for epoch in range(args.epochs):
+    print(f"Epoch [{epoch+1}/{args.epochs}]")
+    print("Evaluating Model") 
+    all_preds = evaluate_model(model, test_loader, device, monitor_interval=5)
+    print(f"Generated predictions shape: {all_preds.shape}")
 
-print(f"Generated predictions shape: {all_preds.shape}")
+exit(0)
