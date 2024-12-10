@@ -25,6 +25,8 @@ import psutil
 import logging
 from datetime import datetime
 
+CHECKPOINT_DIR = './checkpoints'
+
 # Suppress annoying torch.load warning
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -159,8 +161,16 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
             del out
             torch.cuda.empty_cache()
 
-    except KeyboardInterrupt:
-        logging.info("Training interrupted by user")
+    except:
+        logging.info("Training interrupted")
+        torch.save(model.state_dict(), 'interrupted_model.pth')
+
+        checkpoint_path = os.path.join(CHECKPOINT_DIR, f'interruption_time_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth')
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+        }, checkpoint_path)
     finally:
         monitor.stop()
         pbar.close()
@@ -217,8 +227,8 @@ def validate(model, loader, criterion, device):
                 del out
                 torch.cuda.empty_cache()
 
-    except KeyboardInterrupt:
-        logging.info("Validation interrupted by user")
+    except:
+        logging.info("Validation interrupted")
     finally:
         # Always stop monitoring
         monitor.stop()
@@ -278,8 +288,8 @@ def test(model, loader, criterion, device):
                 del out
                 torch.cuda.empty_cache()
 
-    except KeyboardInterrupt:
-        logging.info("Testing interrupted by user")
+    except:
+        logging.info("Testing interrupted")
     finally:
         # Always stop monitoring
         monitor.stop()
@@ -304,8 +314,10 @@ def test(model, loader, criterion, device):
 # ---------------------------
 
 def main():
-    # Setup logging
+    # Setup logging and checkpoint savespace
     setup_logging()
+    if not os.path.exists(CHECKPOINT_DIR):
+        os.makedirs(CHECKPOINT_DIR)
 
     # Set random seed
     set_seed(234)
@@ -599,7 +611,20 @@ def main():
             best_val_metric = current_metric
             best_epoch = epoch
             patience_counter = 0
+
+            # Save best model
             torch.save(model.state_dict(), 'best_model.pth')
+            checkpoint_path = os.path.join(CHECKPOINT_DIR, f'checkpoint_epoch_{epoch}_time_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth')
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_val_metric': best_val_metric,
+                'best_val_auc': best_val_auc,
+                'best_val_ap': best_val_ap,
+                'patience_counter': patience_counter,
+            }, checkpoint_path)
             logging.info(f"New best model saved at epoch {epoch} with combined metric: {current_metric:.4f} (AUC: {val_auc:.4f}, AP: {val_ap:.4f})")
         else:
             patience_counter += 1
