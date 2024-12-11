@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from timer_guard import TimerGuard
 import pdb
 
 class FeedForwardNetwork(nn.Module):
@@ -271,7 +270,7 @@ class Graphormer(nn.Module):
             self.out_degree_encoder.reset_parameters()
             self.undir_degree_encoder.reset_parameters()
 
-    @TimerGuard('forward', 'utils')
+    #@TimerGuard('forward', 'utils')
     def forward(self, data, perturb=None):
         # attn_bias：图中节点对之间的最短路径距离超过最短路径限制最大距离(len_shortest_path_max)的位置为-∞，其余位置为0，形状为(n_graph, n_node+1, n_node+1)
         # len_shortest_path：图中节点对之间的最短路径长度，形状为(n_graph, n_node, n_node)

@@ -31,11 +31,10 @@ warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
 from utils import *
 import networkx as nx
-from timer_guard import TimerGuard
 from collection import Collections
 
 
-@TimerGuard('process_paths3', 'utils')
+#@TimerGuard('process_paths3', 'utils')
 def process_paths3(paths, edge_index, edge_types, edge_degrees, num_edge_type, directed):
     num_paths = len(paths)
     paths_edge_types = [[] for i in range(num_paths)]
@@ -75,7 +74,7 @@ def process_paths3(paths, edge_index, edge_types, edge_degrees, num_edge_type, d
 
     return paths_edge_types, paths_type, paths_weight, paths_degrees, paths_gravity
 
-@TimerGuard('process_paths2', 'utils')
+#@TimerGuard('process_paths2', 'utils')
 def process_paths2(paths, node_ids, G_undirected, degree, num_edge_type, directed):
     num_paths = len(paths)
     paths_edge_types = [[] for i in range(num_paths)]
@@ -119,7 +118,7 @@ def process_paths2(paths, node_ids, G_undirected, degree, num_edge_type, directe
 
     return paths_edge_types, paths_type, paths_weight, paths_degrees, paths_gravity
 
-@TimerGuard('process_paths', 'utils')
+#@TimerGuard('process_paths', 'utils')
 def process_paths(paths, G, G_inv, G_undirected, degree, num_edge_type, directed):
     num_paths = len(paths)
     paths_edge_types = []
@@ -164,7 +163,7 @@ def process_paths(paths, G, G_inv, G_undirected, degree, num_edge_type, directed
 
     return paths_edge_types, paths_type, paths_weight, paths_degrees, paths_gravity
 
-@TimerGuard('preprocess', 'utils')
+#@TimerGuard('preprocess', 'utils')
 def preprocess(data, degree, **kwargs):
     #print(data)
     #print(kwargs)
@@ -314,7 +313,7 @@ def preprocess(data, degree, **kwargs):
     #        print(key, data[key])
     return data
 
-@TimerGuard('preprocess_full', 'utils')
+#@TimerGuard('preprocess_full', 'utils')
 def preprocess_full(data, degree, **kwargs):
     #print(data)
     #print(kwargs)
@@ -462,126 +461,126 @@ def preprocess_full(data, degree, **kwargs):
 
     return data
 
-@TimerGuard('main', 'utils')
-def main(data, degree):
-    use_len_spd = True
-    use_num_spd = True
-    use_cnb_jac = True
-    use_cnb_aa = True
-    use_cnb_ra = True
-    use_degree = True
-    gravity_type = 2
-    directed = True
+#@TimerGuard('main', 'utils')
+# def main(data, degree):
+#     use_len_spd = True
+#     use_num_spd = True
+#     use_cnb_jac = True
+#     use_cnb_aa = True
+#     use_cnb_ra = True
+#     use_degree = True
+#     gravity_type = 2
+#     directed = True
 
-    device = data.edge_index.device
-    center_indices = np.array([0])
-    num_pair = len(center_indices)
-    i = 0
-    src_idx = center_indices[i]
-    dst_idx = center_indices[i] + 1
+#     device = data.edge_index.device
+#     center_indices = np.array([0])
+#     num_pair = len(center_indices)
+#     i = 0
+#     src_idx = center_indices[i]
+#     dst_idx = center_indices[i] + 1
 
-    data.degree = degree[:, data.node_id]
+#     data.degree = degree[:, data.node_id]
 
-    # remove symmetric edges
-    if directed:
-        edge_index = data.edge_index.t().numpy().copy()  # (30387995, 2)
-        edge_index_inv = edge_index[:, [1, 0]].copy()
-        dtype = [('', edge_index.dtype)] * edge_index.shape[0 if edge_index.flags['F_CONTIGUOUS'] else -1]
-        edge_index_repeat, x_ind, y_ind = np.intersect1d(edge_index.view(dtype), edge_index_inv.view(dtype), return_indices=True)
-        indices = np.array([i for i in range(edge_index.shape[0])])
-        indices = np.delete(indices, x_ind)
+#     # remove symmetric edges
+#     if directed:
+#         edge_index = data.edge_index.t().numpy().copy()  # (30387995, 2)
+#         edge_index_inv = edge_index[:, [1, 0]].copy()
+#         dtype = [('', edge_index.dtype)] * edge_index.shape[0 if edge_index.flags['F_CONTIGUOUS'] else -1]
+#         edge_index_repeat, x_ind, y_ind = np.intersect1d(edge_index.view(dtype), edge_index_inv.view(dtype), return_indices=True)
+#         indices = np.array([i for i in range(edge_index.shape[0])])
+#         indices = np.delete(indices, x_ind)
 
-    num_edges = data.edge_index.size()[1]
-    num_edge_type = 1
-    max_len_rule = 3
-    num_rules = pow(num_edge_type*2, max_len_rule+1) - 2
+#     num_edges = data.edge_index.size()[1]
+#     num_edge_type = 1
+#     max_len_rule = 3
+#     num_rules = pow(num_edge_type*2, max_len_rule+1) - 2
 
-    edge_type = torch.tensor([0 for i in range(num_edges)], dtype=torch.long)
-    with TimerGuard('to_networkx', 'utils'):
-        # cost 1500+ms, need to be optimized
-        G_undirected = to_networkx(Data(torch.zeros_like(data.node_id), torch.cat([data.edge_index.cpu(), data.edge_index.cpu()[[1, 0], :]], dim=-1)), to_undirected=True)
-    with TimerGuard('to_networkx', 'utils'):
-        if directed:
-            G = to_networkx(Data(torch.zeros_like(data.node_id), data.edge_index.cpu(), edge_type=edge_type.numpy()), edge_attrs=['edge_type'], to_undirected=False)
-            G_inv = to_networkx(Data(torch.zeros_like(data.node_id), data.edge_index.cpu()[[1, 0], :], edge_type=edge_type.numpy()+num_edge_type), edge_attrs=['edge_type'], to_undirected=False)
-    with TimerGuard('all_simple_paths', 'utils'):
-        paths = list(nx.all_simple_paths(G_undirected, source=src_idx, target=dst_idx, cutoff=max_len_rule))
-        paths = sorted(paths)
-        paths_inv = cp.deepcopy(paths)
-        for path in paths_inv:
-            path.reverse()
-    num_paths = len(paths)
+#     # edge_type = torch.tensor([0 for i in range(num_edges)], dtype=torch.long)
+#     # with TimerGuard('to_networkx', 'utils'):
+#     #     # cost 1500+ms, need to be optimized
+#     #     G_undirected = to_networkx(Data(torch.zeros_like(data.node_id), torch.cat([data.edge_index.cpu(), data.edge_index.cpu()[[1, 0], :]], dim=-1)), to_undirected=True)
+#     # with TimerGuard('to_networkx', 'utils'):
+#     #     if directed:
+#     #         G = to_networkx(Data(torch.zeros_like(data.node_id), data.edge_index.cpu(), edge_type=edge_type.numpy()), edge_attrs=['edge_type'], to_undirected=False)
+#     #         G_inv = to_networkx(Data(torch.zeros_like(data.node_id), data.edge_index.cpu()[[1, 0], :], edge_type=edge_type.numpy()+num_edge_type), edge_attrs=['edge_type'], to_undirected=False)
+#     # with TimerGuard('all_simple_paths', 'utils'):
+#     #     paths = list(nx.all_simple_paths(G_undirected, source=src_idx, target=dst_idx, cutoff=max_len_rule))
+#     #     paths = sorted(paths)
+#     #     paths_inv = cp.deepcopy(paths)
+#     #     for path in paths_inv:
+#     #         path.reverse()
+#     # num_paths = len(paths)
 
-    #print(f'num paths {num_paths}')
-    paths_edge_types, paths_type, paths_weight, paths_degrees, paths_gravity = process_paths(paths, G, G_inv, G_undirected, data.degree, num_edge_type, directed)
-    paths_edge_types_inv, paths_type_inv, paths_weight_inv, paths_degrees_inv, paths_gravity_inv = process_paths(paths_inv, G, G_inv, G_undirected, data.degree, num_edge_type, directed)
+#     #print(f'num paths {num_paths}')
+#     paths_edge_types, paths_type, paths_weight, paths_degrees, paths_gravity = process_paths(paths, G, G_inv, G_undirected, data.degree, num_edge_type, directed)
+#     paths_edge_types_inv, paths_type_inv, paths_weight_inv, paths_degrees_inv, paths_gravity_inv = process_paths(paths_inv, G, G_inv, G_undirected, data.degree, num_edge_type, directed)
 
-    pair_paths_weight = torch.zeros((num_pair, 2, 2, num_rules), dtype=torch.float)
-    for idx_path in range(num_paths):
-        pair_paths_weight[i][1][0][paths_type[idx_path]] += paths_weight[idx_path]
-        pair_paths_weight[i][0][1][paths_type_inv[idx_path]] += paths_weight_inv[idx_path]
+#     pair_paths_weight = torch.zeros((num_pair, 2, 2, num_rules), dtype=torch.float)
+#     for idx_path in range(num_paths):
+#         pair_paths_weight[i][1][0][paths_type[idx_path]] += paths_weight[idx_path]
+#         pair_paths_weight[i][0][1][paths_type_inv[idx_path]] += paths_weight_inv[idx_path]
 
-    with TimerGuard('process edge_index', 'utils'):
-        edge_index = torch.cat([data.edge_index.cpu(), data.edge_index[:, indices].cpu()[[1, 0], :], ], dim=-1)
-        if directed:
-            edge_type = torch.cat([edge_type, edge_type[indices]+num_edge_type], dim=-1)
-            edge_degree = torch.cat([degree[2, data.node_id[data.edge_index[0, :]]], degree[1, data.node_id[data.edge_index[1, :]]][indices]], dim=-1)
-        else:
-            edge_type = torch.cat([edge_type, edge_type], dim=-1)
-            edge_degree = degree[:, data.node_id[data.edge_index[0, :]]]
-            edge_degree = edge_degree.repeat(2)
-        edge_attrs = torch.stack([edge_type, edge_degree])
-        edge_attrs_np = edge_attrs.numpy().transpose().copy()
-        edge_attrs_np = edge_attrs_np.view(dtype).transpose().squeeze().copy()
-    #with TimerGuard('to_networkx', 'utils'):
-    #    G_undirected = to_networkx(Data(torch.zeros_like(data.node_id), edge_index, edge_type=edge_type.numpy(), edge_degree=edge_degree.numpy()), edge_attrs=['edge_type', 'edge_degree'], to_undirected=False)
-    with TimerGuard('to_networkx', 'utils'):
-        G_undirected = to_networkx(Data(torch.zeros_like(data.node_id), edge_index, edge_attrs=edge_attrs_np), edge_attrs=['edge_attrs'], to_undirected=False)
-    with TimerGuard('all_simple_paths', 'utils'):
-        paths2 = list(nx.all_simple_paths(G_undirected, source=src_idx, target=dst_idx, cutoff=max_len_rule))
-        paths2 = sorted(paths2)
-        paths_inv2 = cp.deepcopy(paths2)
-        for path in paths_inv2:
-            path.reverse()
-    num_paths2 = len(paths2)
-    #print(f'num paths {num_paths}')
-    paths_edge_types2, paths_type2, paths_weight2, paths_degrees2, paths_gravity2 = process_paths2(paths2, data.node_id, G_undirected, degree, num_edge_type, directed)
-    paths_edge_types_inv2, paths_type_inv2, paths_weight_inv2, paths_degrees_inv2, paths_gravity_inv2 = process_paths2(paths_inv2, data.node_id, G_undirected, degree, num_edge_type, directed)
+#     with TimerGuard('process edge_index', 'utils'):
+#         edge_index = torch.cat([data.edge_index.cpu(), data.edge_index[:, indices].cpu()[[1, 0], :], ], dim=-1)
+#         if directed:
+#             edge_type = torch.cat([edge_type, edge_type[indices]+num_edge_type], dim=-1)
+#             edge_degree = torch.cat([degree[2, data.node_id[data.edge_index[0, :]]], degree[1, data.node_id[data.edge_index[1, :]]][indices]], dim=-1)
+#         else:
+#             edge_type = torch.cat([edge_type, edge_type], dim=-1)
+#             edge_degree = degree[:, data.node_id[data.edge_index[0, :]]]
+#             edge_degree = edge_degree.repeat(2)
+#         edge_attrs = torch.stack([edge_type, edge_degree])
+#         edge_attrs_np = edge_attrs.numpy().transpose().copy()
+#         edge_attrs_np = edge_attrs_np.view(dtype).transpose().squeeze().copy()
+#     #with TimerGuard('to_networkx', 'utils'):
+#     #    G_undirected = to_networkx(Data(torch.zeros_like(data.node_id), edge_index, edge_type=edge_type.numpy(), edge_degree=edge_degree.numpy()), edge_attrs=['edge_type', 'edge_degree'], to_undirected=False)
+#     # with TimerGuard('to_networkx', 'utils'):
+#     #     G_undirected = to_networkx(Data(torch.zeros_like(data.node_id), edge_index, edge_attrs=edge_attrs_np), edge_attrs=['edge_attrs'], to_undirected=False)
+#     # with TimerGuard('all_simple_paths', 'utils'):
+#     #     paths2 = list(nx.all_simple_paths(G_undirected, source=src_idx, target=dst_idx, cutoff=max_len_rule))
+#     #     paths2 = sorted(paths2)
+#     #     paths_inv2 = cp.deepcopy(paths2)
+#     #     for path in paths_inv2:
+#     #         path.reverse()
+#     # num_paths2 = len(paths2)
+#     #print(f'num paths {num_paths}')
+#     paths_edge_types2, paths_type2, paths_weight2, paths_degrees2, paths_gravity2 = process_paths2(paths2, data.node_id, G_undirected, degree, num_edge_type, directed)
+#     paths_edge_types_inv2, paths_type_inv2, paths_weight_inv2, paths_degrees_inv2, paths_gravity_inv2 = process_paths2(paths_inv2, data.node_id, G_undirected, degree, num_edge_type, directed)
 
-    pair_paths_weight2 = torch.zeros((num_pair, 2, 2, num_rules), dtype=torch.float)
-    for idx_path in range(num_paths2):
-        pair_paths_weight2[i][1][0][paths_type2[idx_path]] += paths_weight2[idx_path]
-        pair_paths_weight2[i][0][1][paths_type_inv2[idx_path]] += paths_weight_inv2[idx_path]
+#     # pair_paths_weight2 = torch.zeros((num_pair, 2, 2, num_rules), dtype=torch.float)
+#     # for idx_path in range(num_paths2):
+#     #     pair_paths_weight2[i][1][0][paths_type2[idx_path]] += paths_weight2[idx_path]
+#     #     pair_paths_weight2[i][0][1][paths_type_inv2[idx_path]] += paths_weight_inv2[idx_path]
     
-    print(num_paths == num_paths2)
-    print(paths == paths2)
-    print(paths_edge_types == paths_edge_types2)
-    print(paths_type == paths_type2)
-    print(np.where(np.array(paths_weight) - np.array(paths_weight2) > 1e-7))
-    print(paths_degrees == paths_degrees2)
-    print(paths_gravity == paths_gravity2)
-    print(paths_edge_types_inv == paths_edge_types_inv2)
-    print(paths_type_inv == paths_type_inv2)
-    print(np.where(np.array(paths_weight_inv) - np.array(paths_weight_inv2) > 1e-7))
-    print(paths_degrees_inv == paths_degrees_inv2)
-    diff = [paths_degrees_inv[i]==paths_degrees_inv2[i] for i in range(num_paths)]
-    print(paths_gravity_inv == paths_gravity_inv2)
-    print(np.where(pair_paths_weight - pair_paths_weight2 > 1e-7))
+#     # print(num_paths == num_paths2)
+#     # print(paths == paths2)
+#     print(paths_edge_types == paths_edge_types2)
+#     print(paths_type == paths_type2)
+#     print(np.where(np.array(paths_weight) - np.array(paths_weight2) > 1e-7))
+#     print(paths_degrees == paths_degrees2)
+#     print(paths_gravity == paths_gravity2)
+#     print(paths_edge_types_inv == paths_edge_types_inv2)
+#     print(paths_type_inv == paths_type_inv2)
+#     print(np.where(np.array(paths_weight_inv) - np.array(paths_weight_inv2) > 1e-7))
+#     print(paths_degrees_inv == paths_degrees_inv2)
+#     # diff = [paths_degrees_inv[i]==paths_degrees_inv2[i] for i in range(num_paths)]
+#     print(paths_gravity_inv == paths_gravity_inv2)
+#     # print(np.where(pair_paths_weight - pair_paths_weight2 > 1e-7))
 
-    preprocess(data, degree, directed=directed,
-                        use_len_spd=use_len_spd,
-                        use_num_spd=use_num_spd,
-                        use_cnb_jac=use_cnb_jac,
-                        use_cnb_aa=use_cnb_aa,
-                        use_cnb_ra=use_cnb_ra,
-                        use_degree=use_degree,
-                        gravity_type=gravity_type,
-    )
-    print(np.where(pair_paths_weight - data.pair_paths_weight > 1e-7))
-    return
+#     preprocess(data, degree, directed=directed,
+#                         use_len_spd=use_len_spd,
+#                         use_num_spd=use_num_spd,
+#                         use_cnb_jac=use_cnb_jac,
+#                         use_cnb_aa=use_cnb_aa,
+#                         use_cnb_ra=use_cnb_ra,
+#                         use_degree=use_degree,
+#                         gravity_type=gravity_type,
+#     )
+#     print(np.where(pair_paths_weight - data.pair_paths_weight > 1e-7))
+#     return
 
-if __name__ == "__main__":
-    data = torch.load('data.pt')
-    degree = data.degree
+# if __name__ == "__main__":
+#     data = torch.load('data.pt')
+#     degree = data.degree
 
-    main(data, degree)
+#     main(data, degree)

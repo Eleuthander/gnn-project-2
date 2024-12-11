@@ -24,10 +24,7 @@ from torch_geometric.data import Data, Dataset, InMemoryDataset
 from torch_sparse import coalesce
 # from surel_gacc import run_sample, sjoin, run_walk
 # from rpe import get_link_subgraph_rpe
-
 from utils import *
-from timer_guard import TimerGuard
-import preprocess
 
 class SEALIterableDataset(IterableDataset):
     def __init__(self, root, data, split_edge, num_hops, percent=100, split='train', 
@@ -58,7 +55,9 @@ class SEALIterableDataset(IterableDataset):
         self.links = torch.cat([pos_edge, neg_edge], 1).t()
         self.link_nodes = torch.unique(self.links)
         self.labels = torch.Tensor([1] * pos_edge.size(1) + [0] * neg_edge.size(1)).long()
-
+        temp_indices = torch.randperm(len(self.links)) # Added
+        self.links = self.links[temp_indices] # Added
+        self.labels = self.labels[temp_indices] # Added
         self.num_edge_types = 1
         self.max_len_rule = 3
         self.num_rules = pow(self.num_edge_types*2, self.max_len_rule+1) - 2
@@ -336,7 +335,7 @@ class SEALIterableDataset(IterableDataset):
                 data_list = []
                 idc = [idx for idx in range(slice_pts[slice_id], slice_pts[slice_id+1])]
                 # if self.shuffle:
-                #     np.random.seed(123)
+                #     np.random.seed()
                 #     perm = np.random.permutation(len(idc))
                 #     idc = np.array(idc)[perm].tolist()
                 for i, idx in enumerate(idc):
@@ -690,7 +689,7 @@ class SEALDynamicDataset(Dataset):
     def len(self):
         return self.__len__()
 
-    @TimerGuard('get', 'utils')
+    #@TimerGuard('get', 'utils')
     def get(self, idx):
         src, dst = self.links[idx].tolist()
         y = self.labels[idx].tolist()

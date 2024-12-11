@@ -336,8 +336,6 @@ def test(model, loader, criterion, device):
 # Weight Initialization Function
 # ---------------------------
 
-# For GCN with dropout = 0.2, :
-
 def init_weights(m, model, full_graph):
     # For GCN, this is pretty good, with dropout = 0.2, 3 layers and using features, 64 hidden dim, loss drops rapidly
     if model=='GCNGraphormer':
@@ -372,7 +370,7 @@ def init_weights(m, model, full_graph):
                     torch.nn.init.uniform_(m.bias, -bound, bound)
             else:
                 # Standard Xavier/Glorot for other layers
-                torch.nn.init.xavier_uniform_(m.weight, gain=5.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=4.0)
                 if m.bias is not None:
                     torch.nn.init.zeros_(m.bias)
     else:
@@ -404,7 +402,7 @@ def main():
         full_graph=False, # whether to add fake edges to SAN
         layer_norm=True, # whether to implement layer norms in the SAN; batch norm always implemented
         gamma=1e-12, # between 0 and 1:  0 is fully sparse, 1 fully (1e-12 through 1e-11 reasonable for this impl)
-        GT_n_heads = 2, # Num heads for SAN module (2 reasonable)
+        GT_n_heads = 4, # Num heads for SAN module (2-4 reasonable)
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
         # Subgraph args
@@ -466,13 +464,13 @@ def main():
     set_seed(args.seed)
 
     # Load data
-    data = torch.load('fed_cites_graph_test.pt')
+    data = torch.load('scotus_graph_processed.pt')
     logging.info(f"Loaded data: {data}")
 
     # Create splits
     logging.info("Creating splits...")
     dataset = [data]  # Wrap in list for do_edge_split
-    split_edge = do_edge_split(dataset, fast_split=True, val_ratio=0.1, test_ratio=0.1, neg_ratio=1)
+    split_edge = do_edge_split(dataset, val_ratio=0.1, test_ratio=0.1, neg_ratio=1)
     data.edge_index = split_edge['train']['edge'].t()
     logging.info("Created splits")
 
@@ -491,7 +489,7 @@ def main():
 
     # Create datasets
     logging.info("Creating datasets...")
-    train_dataset = SEALIterableDataset(
+    train_dataset = SEALDynamicDataset(
         root='./temp_seal_data/train',
         data=data,
         split_edge=split_edge,
@@ -507,7 +505,7 @@ def main():
         internal_shuffle=True,
         slice_type=0
     )
-    val_dataset = SEALIterableDataset(
+    val_dataset = SEALDynamicDataset(
         root='./temp_seal_data/val',
         data=data,
         split_edge=split_edge,
@@ -523,7 +521,7 @@ def main():
         internal_shuffle=False,
         slice_type=0
     )
-    test_dataset = SEALIterableDataset(
+    test_dataset = SEALDynamicDataset(
         root='./temp_seal_data/test',
         data=data,
         split_edge=split_edge,
@@ -547,7 +545,7 @@ def main():
         train_loader = PygDataLoader(
             train_dataset,
             batch_size=args.batch_size,
-            # shuffle=False, Shuffling is done in a custom way within the dataset
+            shuffle=True,
             num_workers=args.num_workers,
             pin_memory=args.pin_memory,
             prefetch_factor=args.prefetch_factor,
@@ -556,7 +554,7 @@ def main():
         val_loader = PygDataLoader(
             val_dataset,
             batch_size=args.batch_size,
-            # shuffle=False,
+            shuffle=False,
             num_workers=args.num_workers,
             pin_memory=args.pin_memory,
             prefetch_factor=args.prefetch_factor,
@@ -565,7 +563,7 @@ def main():
         test_loader = PygDataLoader(
             test_dataset,
             batch_size=args.batch_size,
-            # shuffle=False,
+            shuffle=False,
             num_workers=args.num_workers,
             pin_memory=args.pin_memory,
             prefetch_factor=args.prefetch_factor,
@@ -575,7 +573,7 @@ def main():
         train_loader = PygDataLoader(
             train_dataset,
             batch_size=args.batch_size,
-            # shuffle=False, # shuffling done in a custom way within the dataset
+            shuffle=True,
             num_workers=0,
             pin_memory=args.pin_memory,
             prefetch_factor=None
@@ -583,7 +581,7 @@ def main():
         val_loader = PygDataLoader(
             val_dataset,
             batch_size=args.batch_size,
-            # shuffle=False,
+            shuffle=False,
             num_workers=0,
             pin_memory=args.pin_memory,
             prefetch_factor=None
@@ -591,7 +589,7 @@ def main():
         test_loader = PygDataLoader(
             test_dataset,
             batch_size=args.batch_size,
-            # shuffle=False,
+            shuffle=False,
             num_workers=0,
             pin_memory=args.pin_memory,
             prefetch_factor=None

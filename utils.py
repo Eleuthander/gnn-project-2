@@ -17,7 +17,6 @@ from torch_geometric.loader import DataLoader as PygDataLoader
 from torch_geometric.data import Data as PygData
 from torch_geometric.utils import (negative_sampling, add_self_loops,
                                    train_test_split_edges)
-from timer_guard import TimerGuard
 from collection import Collections
 import copy as cp
 import pdb
@@ -397,9 +396,20 @@ def do_edge_split(dataset, fast_split=False, val_ratio=0.05, test_ratio=0.1, neg
     if not fast_split:
         data = train_test_split_edges(data, val_ratio, test_ratio)
         # edge_index和data.train_neg_edge_index后面没用，在get_pos_neg_edges里重新计算了这俩
-        edge_index, _ = add_self_loops(data.train_pos_edge_index)
+        edges_to_avoid = [
+        data.train_pos_edge_index,
+        data.val_pos_edge_index,
+        data.test_pos_edge_index,
+        data.val_neg_edge_index,
+        data.test_neg_edge_index
+        ]
+        # Add self-loops to avoid sampling them
+        edge_index_with_self_loops, _ = add_self_loops(
+            torch.cat(edges_to_avoid, dim=1),
+            num_nodes=data.num_nodes
+        )
         data.train_neg_edge_index = negative_sampling(
-            edge_index, num_nodes=data.num_nodes,
+            edge_index_with_self_loops, num_nodes=data.num_nodes,
             num_neg_samples=int(data.train_pos_edge_index.size(1)*neg_ratio))
     else:
         num_nodes = data.num_nodes
