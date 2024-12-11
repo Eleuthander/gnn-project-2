@@ -590,7 +590,7 @@ def main():
     iterations_per_epoch = len(train_loader)
     warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
         optimizer, 
-        start_factor=0.1,
+        start_factor=0.3,
         end_factor=1.0, 
         total_iters=int(args.warmup_proportion * iterations_per_epoch),
     )
