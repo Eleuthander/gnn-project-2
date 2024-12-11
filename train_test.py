@@ -26,6 +26,7 @@ from datetime import datetime
 from torch.nn import Linear
 
 CHECKPOINT_DIR = './checkpoints'
+METRICS_DIR = './metrics'
 
 # Suppress annoying warnings; the deprecation warnings are ignorable since you are using an old version of torch
 import warnings
@@ -58,6 +59,21 @@ def setup_logging(log_dir='./logs'):
         ]
     )
     logging.info(f"Logging initialized. Log file: {log_filename}")
+
+def save_metrics(metrics_dict, filename):
+    """
+    Save metrics to a CSV file.
+    """
+    df = pd.DataFrame([metrics_dict])
+    
+    # Create directory if it doesn't exist
+    os.makedirs(METRICS_DIR, exist_ok=True)
+    
+    # If file exists, append without header. If not, create with header
+    if os.path.exists(filename):
+        df.to_csv(filename, mode='a', header=False, index=False)
+    else:
+        df.to_csv(filename, mode='w', header=True, index=False)
 
 # ---------------------------
 # Set Random Seeds
@@ -606,6 +622,10 @@ def main():
     )
     logging.info("Initialized sequential scheduler with warmup and cosine annealing")
 
+    # Create metrics filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    metrics_filename = os.path.join(METRICS_DIR, f'training_metrics_{timestamp}.csv')
+
     # Training loop with validation and early stopping
     best_val_metric = 0
     best_val_auc = 0
@@ -624,14 +644,35 @@ def main():
         val_loss, val_auc, val_ap = validate(model, val_loader, criterion, device)
         logging.info(f"Validation Loss: {val_loss:.4f}, AUC: {val_auc:.4f}, AP: {val_ap:.4f}")
 
+        # Evaluate on test set
+        test_loss, test_auc, test_ap = test(model, test_loader, criterion, device)
+        logging.info(f"Test Loss: {test_loss:.4f}, AUC: {test_auc:.4f}, AP: {test_ap:.4f}")
+
+        # Save metrics
+        metrics = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'epoch': epoch,
+            'train_loss': train_loss,
+            'train_auc': train_auc,
+            'train_ap': train_ap,
+            'val_loss': val_loss,
+            'val_auc': val_auc,
+            'val_ap': val_ap,
+            'test_loss': test_loss,
+            'test_auc': test_auc,
+            'test_ap': test_ap,
+            'learning_rate': optimizer.param_groups[0]['lr']
+        }
+        save_metrics(metrics, metrics_filename)
+
         # Check for improvement
-        current_metric = val_auc * 0.6 + val_ap * 0.4
+        current_metric = val_auc * 0.5 + val_ap * 0.5
         if current_metric > best_val_metric:
             best_val_metric = current_metric
             best_epoch = epoch
             patience_counter = 0
 
-            # Save best model
+            # Save best model if improvement
             torch.save(model.state_dict(), 'best_model.pth')
             checkpoint_path = os.path.join(CHECKPOINT_DIR, f'checkpoint_epoch_{epoch}_time_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pth')
             torch.save({
@@ -654,15 +695,28 @@ def main():
             logging.info(f"Early stopping triggered. Best epoch: {best_epoch} with combined metric: {best_val_metric:.4f} (AUC: {best_val_auc:.4f}, AP: {best_val_ap:.4f})")
             break
 
-    # Load the best model
-    logging.info("Loading the best model for testing...")
+    # Final evaluation with best model
     model.load_state_dict(torch.load('best_model.pth'))
-
-    # Evaluate on test set
-    logging.info("Evaluating on test set...")
-    test_loss, test_auc, test_ap = test(model, test_loader, criterion, device)
-
-    logging.info("Training and evaluation complete.")
+    final_test_loss, final_test_auc, final_test_ap = test(model, test_loader, criterion, device)
+    
+    # Save final metrics
+    final_metrics = {
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'epoch': 'final',
+        'train_loss': None,
+        'train_auc': None,
+        'train_ap': None,
+        'val_loss': None,
+        'val_auc': None,
+        'val_ap': None,
+        'test_loss': final_test_loss,
+        'test_auc': final_test_auc,
+        'test_ap': final_test_ap,
+        'learning_rate': optimizer.param_groups[0]['lr']
+    }
+    save_metrics(final_metrics, metrics_filename)
+    
+    logging.info("Training and evaluation complete. Metrics saved to: " + metrics_filename)
 
 if __name__ == "__main__":
     main()
