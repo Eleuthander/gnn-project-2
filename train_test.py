@@ -14,6 +14,7 @@ from torch.cuda.amp import autocast, GradScaler  # for mixed precision training
 import gc
 import os
 import numpy as np
+import pandas as pd
 from sklearn.metrics import roc_auc_score, average_precision_score
 import random
 import math
@@ -144,7 +145,7 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
                 #model.print_gradient_norms()
                 # Unscale before measuring gradients
                 scaler.unscale_(optimizer)
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 2.5)
                 
                 scaler.step(optimizer)
                 scaler.update()
@@ -152,11 +153,11 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
                 out = model(batch).squeeze()
                 loss = criterion(out, batch.y.float())
                 loss.backward()
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 2.5)
                 optimizer.step()
             
             # Log gradient and usage periodically
-            if i > 0 and i % max(1, len(pbar) // 10) == 0:  # Every 10%
+            if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
                 gpu = GPUtil.getGPUs()[0]
                 cpu_percent = psutil.cpu_percent()
                 memory = psutil.virtual_memory()
@@ -229,7 +230,7 @@ def validate(model, loader, criterion, device):
                     loss = criterion(out, batch.y.float())
 
                 # Log gradient and usage periodically
-                if i > 0 and i % max(1, len(pbar) // 10) == 0:
+                if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
                     gpu = GPUtil.getGPUs()[0]
                     cpu_percent = psutil.cpu_percent()
                     memory = psutil.virtual_memory()
@@ -292,7 +293,7 @@ def test(model, loader, criterion, device):
                     loss = criterion(out, batch.y.float())
 
                 # Log gradient and usage periodically
-                if i > 0 and i % max(1, len(pbar) // 10) == 0:
+                if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
                     gpu = GPUtil.getGPUs()[0]
                     cpu_percent = psutil.cpu_percent()
                     memory = psutil.virtual_memory()
@@ -335,11 +336,47 @@ def test(model, loader, criterion, device):
 # Weight Initialization Function
 # ---------------------------
 
-def init_weights(m):
-    if isinstance(m, Linear):
-        torch.nn.init.xavier_uniform_(m.weight)
-        if m.bias is not None:
-            torch.nn.init.zeros_(m.bias)
+# For GCN with dropout = 0.2, :
+
+def init_weights(m, model, full_graph):
+    # For GCN, this is pretty good, with dropout = 0.2, 3 layers and using features, 64 hidden dim, loss drops rapidly
+    if model=='GCNGraphormer':
+        if isinstance(m, Linear):
+            torch.nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                torch.nn.init.zeros_(m.bias)
+    # For SAN with full_graph = True, this is pretty good, with dropout = 0.8, 5 layers and using features, you start around loss 6 and go down slowly
+    elif model=='SANGraphormer' and full_graph:
+        if isinstance(m, Linear):
+            if hasattr(m, 'final_layer') and m.final_layer:
+                # Xavier/Glorot initialization with larger gain for final layer
+                torch.nn.init.xavier_uniform_(m.weight, gain=3.0)
+                if m.bias is not None:
+                    fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(m.weight)
+                    bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                    torch.nn.init.uniform_(m.bias, -bound, bound)
+            else:
+                # Standard Xavier/Glorot for other layers
+                torch.nn.init.xavier_uniform_(m.weight, gain=2.0)
+                if m.bias is not None:
+                    torch.nn.init.zeros_(m.bias)
+    # For SAN with full_graph = False, this is pretty good, with dropout = 0.8, 5 layers and using features, you start around loss _ and go slowly down
+    elif model=='SANGraphormer' and not full_graph:
+        if isinstance(m, Linear):
+            if hasattr(m, 'final_layer') and m.final_layer:
+                # Xavier/Glorot initialization with larger gain for final layer
+                torch.nn.init.xavier_uniform_(m.weight, gain=8.0)
+                if m.bias is not None:
+                    fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(m.weight)
+                    bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                    torch.nn.init.uniform_(m.bias, -bound, bound)
+            else:
+                # Standard Xavier/Glorot for other layers
+                torch.nn.init.xavier_uniform_(m.weight, gain=3.0)
+                if m.bias is not None:
+                    torch.nn.init.zeros_(m.bias)
+    else:
+        pass
 
 # ---------------------------
 # Main Function
@@ -351,33 +388,28 @@ def main():
     if not os.path.exists(CHECKPOINT_DIR):
         os.makedirs(CHECKPOINT_DIR)
 
-    # Set random seed
-    set_seed(234)
-
     # Device configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f"Using device: {device}")
 
-    # Load data
-    data = torch.load('fed_cites_graph_sample.pt')
-    logging.info(f"Loaded data: {data}")
-
-    # Create default args for GCNGraphormer
+    # Create default args
     args = SimpleNamespace(
+        seed = 234,
+
         # Model args
-        model = 'GCNGraphormer',  # either 'SANGraphormer' or 'GCNGraphormer'
-        hidden_channels=64, # transformer block dims (64-128 reasonable) \ embedding dim in GCN (32 reasonable)
-        num_layers=3, # 6 for SAN, 3 for GCN
-        dropout=0.5,
+        model = 'SANGraphormer',  # either 'SANGraphormer' or 'GCNGraphormer'
+        hidden_channels=64, # transformer block dims (32 reasonable) \ embedding dim in GCN (32 reasonable)
+        num_layers=3, # 5 for SAN, 3 for GCN
+        dropout=0.2, # 0.8 for SAN, 0.2 for GCN
         full_graph=True, # whether to add fake edges to SAN
-        layer_norm=False, # whether to implement layer norms in the SAN; batch norm always implemented
+        layer_norm=True, # whether to implement layer norms in the SAN; batch norm always implemented
         gamma=1e-11, # between 0 and 1:  0 is fully sparse, 1 fully (1e-12 through 1e-11 reasonable for this impl)
-        GT_n_heads = 4, # Num heads for SAN module (4-8 reasonable)
+        GT_n_heads = 2, # Num heads for SAN module (2 reasonable)
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
         # Subgraph args
         num_hops = 2,
-        max_nodes_per_hop = 32,
+        max_nodes_per_hop = 24,
         max_z=1000,  # Max value for structural encoding
 
         # Batching args
@@ -407,14 +439,34 @@ def main():
         num_step = 1,
 
         # Training args
-        initial_lr=1e-3,
+        initial_lr=1e-4,
         min_lr=1e-6,
-        warmup_proportion=0.2, # what proportion of first epoch you want used for warmup
+        warmup_proportion=0.4, # what proportion of first epoch you want used for warmup
         T_0=1.0, # what proportion of an epoch you want for cosine period in scheduler
-        weight_decay=5e-4,
+        weight_decay=1e-4,
         num_epochs=5,
-        early_stopping_patience=3,  # Number of epochs to wait for improvement
+        early_stopping_patience=5,  # Number of epochs to wait for improvement
     )
+
+    # Take command line args
+    parser = argparse.ArgumentParser(description="Override default arguments.")
+    parser.add_argument("--model", type=str, default=args.model, help="Name of the model")
+    parser.add_argument("--hidden_channels", type=int, default=args.hidden_channels, help="Hidden dimmension")
+    parser.add_argument("--num_layers", type=int, default=args.num_layers, help="Depth of the model")
+    parser.add_argument("--dropout", type=float, default=args.dropout, help="Dropout for layers")
+    parser.add_argument("--seed", type=int, default=args.dropout, help="Randomization replicator")
+
+    parsed_args = parser.parse_args()
+    for key, value in vars(parsed_args).items():
+        setattr(args, key, value)
+        logging.info(f"Argument {key} is {value}")
+
+    # Set random seed
+    set_seed(args.seed)
+
+    # Load data
+    data = torch.load('fed_cites_graph_test.pt')
+    logging.info(f"Loaded data: {data}")
 
     # Create splits
     logging.info("Creating splits...")
@@ -570,6 +622,7 @@ def main():
             node_embedding=None,
             dropout=args.dropout
         ).to(device)
+        logging.info("Model: GCNGraphormer")
     elif args.model == 'SANGraphormer':
         model = SANGraphormer(
             args=args,
@@ -587,10 +640,13 @@ def main():
             layer_norm=args.layer_norm,
             gamma=args.gamma
         ).to(device)
+        logging.info("Model: SANGraphormer")
     else:
         logging.error("Error: Model not recognized.")
         exit()
-    model.apply(init_weights)
+
+    init_weights_with_args = partial(init_weights, model=args.model, full_graph=args.full_graph)
+    model.apply(init_weights_with_args)
     logging.info("Created Model")
 
     # Count and log model parameters

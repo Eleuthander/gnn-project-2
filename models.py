@@ -95,6 +95,7 @@ class SANGraphormer(torch.nn.Module):
         # Output layers
         self.lin1 = Linear(2 * hidden_channels, hidden_channels)
         self.lin2 = Linear(hidden_channels, 1)
+        self.lin2.final_layer = True # Marker for final layer
 
     def reset_parameters(self):
         for layer in self.layers:

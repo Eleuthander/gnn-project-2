@@ -1,0 +1,29 @@
+2024-12-11 08:53:04,422 [INFO] Logging initialized. Log file: ./logs/training_20241211_085304.log
+2024-12-11 08:53:04,424 [INFO] Using device: cuda
+2024-12-11 08:53:04,425 [INFO] Argument model is SANGraphormer
+2024-12-11 08:53:04,425 [INFO] Argument hidden_channels is 32
+2024-12-11 08:53:04,425 [INFO] Argument num_layers is 4
+2024-12-11 08:53:04,425 [INFO] Argument dropout is 0.8
+2024-12-11 08:53:04,425 [INFO] Argument seed is 456
+2024-12-11 08:53:04,427 [INFO] Random seed set to 456
+2024-12-11 08:53:05,348 [INFO] Loaded data: Data(edge_index=[2, 11629341], num_nodes=757733, x=[757733, 65], decision_date=[757733], court_name=[757733])
+2024-12-11 08:53:05,348 [INFO] Creating splits...
+2024-12-11 08:53:10,951 [INFO] Created splits
+2024-12-11 08:53:10,952 [INFO] Preprocessing function configured.
+2024-12-11 08:53:10,952 [INFO] Creating datasets...
+2024-12-11 08:53:15,213 [INFO] Including validation edges into training edges for testing...
+2024-12-11 08:53:15,220 [INFO] Included validation edges into training edges.
+2024-12-11 08:53:16,793 [INFO] Created datasets.
+2024-12-11 08:53:16,794 [INFO] Creating dataloaders...
+2024-12-11 08:53:16,795 [INFO] Created dataloaders.
+2024-12-11 08:53:16,795 [INFO] Creating Model
+2024-12-11 08:53:17,025 [INFO] Model: SANGraphormer
+2024-12-11 08:53:17,034 [INFO] Created Model
+2024-12-11 08:53:17,035 [INFO] Total trainable parameters in the model: 129157
+2024-12-11 08:53:17,037 [INFO] Initialized sequential scheduler with warmup and cosine annealing
+2024-12-11 08:53:17,037 [INFO] 
+Epoch 1/5
+2024-12-11 09:39:16,408 [INFO] Train Loss: 1.3433, AUC: 0.5012, AP: 0.5017
+2024-12-11 09:43:41,112 [INFO] Validation Loss: 0.6942, AUC: 0.5338, AP: 0.5232
+2024-12-11 09:48:07,319 [INFO] Test Loss: 0.6942, AUC: 0.5331, AP: 0.5231
+2024-12-11 09:48:07,319 [INFO] Test Loss: 0.6942, AUC: 0.5331, AP: 0.5231
