@@ -349,9 +349,9 @@ def main():
     # Create default args for GCNGraphormer
     args = SimpleNamespace(
         # Model args
-        model = 'SANGraphormer',  # either 'SANGraphormer' or 'GCNGraphormer'
+        model = 'GCNGraphormer',  # either 'SANGraphormer' or 'GCNGraphormer'
         hidden_channels=64, # transformer block dims (64-128 reasonable) \ embedding dim in GCN (32 reasonable)
-        num_layers=3,
+        num_layers=3, # 6 for SAN, 3 for GCN
         dropout=0.5,
         full_graph=True, # whether to add fake edges to SAN
         layer_norm=False, # whether to implement layer norms in the SAN; batch norm always implemented
@@ -592,17 +592,17 @@ def main():
         optimizer, 
         start_factor=0.1,
         end_factor=1.0, 
-        total_iters=args.warmup_proportion * iterations_per_epoch,
+        total_iters=int(args.warmup_proportion * iterations_per_epoch),
     )
     cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer, 
-        T_0=args.T_0 * iterations_per_epoch,
+        T_0=int(args.T_0 * iterations_per_epoch),
         eta_min=args.min_lr
     )
     scheduler = torch.optim.lr_scheduler.SequentialLR(
         optimizer,
         schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[args.warmup_proportion * iterations_per_epoch]
+        milestones=[int(args.warmup_proportion * iterations_per_epoch)]
     )
     logging.info("Initialized sequential scheduler with warmup and cosine annealing")
 
