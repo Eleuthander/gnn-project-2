@@ -31,7 +31,7 @@ args = SimpleNamespace(
     epochs = 2,
 
     # Model args
-    model = 'SANGraphormer',
+    model = 'GCNGraphormer',
     hidden_channels=64, # transformer block dims (64-128 reasonable) \ embedding dim in GCN (32 reasonable)
     num_layers=6, # number of GNN module layers (6 reasonable for SAN, 3 for GCN)
     dropout=0.2,
@@ -106,8 +106,27 @@ test_dataset = SEALIterableDataset(
     preprocess_fn=preprocess_fn,
     sample_type=args.sample_type,
     shuffle=False,
-    slice_type=0
 )
+
+# Create test dataset
+#print("Creating test dataset...")
+# test_dataset = SEALDynamicDataset(
+#     root='./temp_seal_data',
+#     data=data,
+#     split_edge=split_edge,
+#     num_hops=args.num_hops,
+#     split='test',
+#     directed=True,
+#     use_coalesce=False,
+#     node_label='drnl',
+#     ratio_per_hop=1.0,
+#     max_nodes_per_hop=args.max_nodes_per_hop,
+#     preprocess_fn=preprocess_fn,
+#     sample_type=args.sample_type,
+#     shuffle=True,
+# )
+# print("Created test dataset")
+
 print("Created test dataset...")
 
 print("Creating dataloader...")
@@ -131,36 +150,6 @@ else:
         prefetch_factor=None  # Must be None when num_workers=0
     )
 print("Created dataloader...")
-
-# # Create test dataset
-# print("Creating test dataset...")
-# test_dataset = SEALDynamicDataset(
-#     root='./temp_seal_data',
-#     data=data,
-#     split_edge=split_edge,
-#     num_hops=args.num_hops,
-#     split='test',
-#     directed=True,
-#     use_coalesce=False,
-#     node_label='drnl',
-#     ratio_per_hop=1.0,
-#     max_nodes_per_hop=args.max_nodes_per_hop,
-#     preprocess_fn=preprocess_fn,
-#     sample_type=args.sample_type
-# )
-# print("Created test dataset")
-
-# # Create dataloader
-# print("Creating dataloader...")
-# test_loader = PygDataLoader(
-#     test_dataset,
-#     batch_size=args.batch_size,
-#     shuffle=False,
-#     num_workers=args.num_workers,
-#     pin_memory=True,
-#     prefetch_factor=args.prefetch_factor
-# )
-# print("Created dataloader")
 
 # Initialize model
 print("Creating Model")

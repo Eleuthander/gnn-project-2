@@ -6,6 +6,7 @@
 # Modify Author: $SHTERM_REAL_USER@alibaba-inc.com
 # Modify Date: 2022-05-26 16:32
 # Function: 
+# CHANGED "SHUFFLE" TO "INTERNAL_SHUFFLE" AND KEYS TO KEYS(), AND COMMENTED OUT PRINT STATEMENTS
 #***************************************************************#
 
 import os, sys
@@ -45,7 +46,7 @@ class SEALIterableDataset(IterableDataset):
         self.directed = directed
         self.sample_type = kwargs["sample_type"] if "sample_type" in kwargs else 0
         self.slice_type = kwargs["slice_type"] if "slice_type" in kwargs else 0
-        self.shuffle = kwargs["shuffle"] if "shuffle" in kwargs else False
+        self.internal_shuffle = kwargs["internal_shuffle"] if "internal_shuffle" in kwargs else False
         self.preprocess_fn = kwargs["preprocess_fn"] if "preprocess_fn" in kwargs else None
         self.sizes = torch.Tensor([30 if max_nodes_per_hop is None else max_nodes_per_hop for i in range(num_hops)]).long()
         super(SEALIterableDataset, self).__init__()
@@ -162,36 +163,36 @@ class SEALIterableDataset(IterableDataset):
             self.pos_slice_pts = np.array([i * self.num_sample_in_slice for i in range(self.pos_num_slice)] + [self.pos_num_sample])
             self.neg_slice_pts = np.array([i * self.num_sample_in_slice for i in range(self.neg_num_slice)] + [self.neg_num_sample])
             self.slice_pts = np.concatenate([self.pos_slice_pts[:-1], self.neg_slice_pts + self.pos_num_sample], axis=0)
-            print(f'num pos slice {self.pos_num_slice}')
-            print(f'num neg slice {self.neg_num_slice}')
+            # print(f'num pos slice {self.pos_num_slice}')
+            # print(f'num neg slice {self.neg_num_slice}')
         else:
             # slice with static number of groups
             self.num_slice = 1024 * 4
             self.slice_pts = np.array([int(i * self.num_sample / self.num_slice) for i in range(self.num_slice)] + [self.num_sample])
-        print(f'num pos sample {pos_edge.size()[1]}')
-        print(f'num neg sample {neg_edge.size()[1]}')
-        print(f'num sample {self.num_sample}')
-        print(f'num slice {self.num_slice}')
+        # print(f'num pos sample {pos_edge.size()[1]}')
+        # print(f'num neg sample {neg_edge.size()[1]}')
+        # print(f'num sample {self.num_sample}')
+        # print(f'num slice {self.num_slice}')
         
         self.dirname = os.path.join(self.root, self.processed_directory_names)
         if not os.path.exists(self.dirname):
-            print(f'mkdir {self.dirname}')
+            # print(f'mkdir {self.dirname}')
             os.makedirs(self.dirname)
-        elif os.path.isdir(self.dirname):
-            print(f'{self.dirname} has {len(os.listdir(self.dirname))} files')
-        else:
-            print(f'{self.dirname} exists but is not a directory')
+        # elif os.path.isdir(self.dirname):
+        #     print(f'{self.dirname} has {len(os.listdir(self.dirname))} files')
+        # else:
+        #     print(f'{self.dirname} exists but is not a directory')
 
         self.save_struct = True
         self.struct_dirname = f'{self.dirname}_struct'
         if not os.path.exists(self.struct_dirname):
             if self.save_struct:
-                print(f'mkdir {self.struct_dirname}')
+                # print(f'mkdir {self.struct_dirname}')
                 os.makedirs(self.struct_dirname)
-        elif os.path.isdir(self.struct_dirname):
-            print(f'{self.struct_dirname} has {len(os.listdir(self.struct_dirname))} files')
-        else:
-            print(f'{self.struct_dirname} exists but is not a directory')
+        # elif os.path.isdir(self.struct_dirname):
+        #     print(f'{self.struct_dirname} has {len(os.listdir(self.struct_dirname))} files')
+        # else:
+        #     print(f'{self.struct_dirname} exists but is not a directory')
 
     @property
     def num_node_features(self) -> int:
@@ -243,7 +244,7 @@ class SEALIterableDataset(IterableDataset):
         else:  # in a worker process
             num_workers = worker_info.num_workers
             worker_id = worker_info.id
-        print(f'worker {worker_id}/{num_workers}, pid {os.getpid()}')
+        # print(f'worker {worker_id}/{num_workers}, pid {os.getpid()}')
         worker_pts = np.array([int(i * num_slice / num_workers) for i in range(num_workers)] + [num_slice])
         #print('slice {}-{} in worker {}'.format(worker_pts[worker_id], worker_pts[worker_id+1], worker_id))
         for slice_id in range(worker_pts[worker_id], worker_pts[worker_id+1]):
@@ -283,7 +284,7 @@ class SEALIterableDataset(IterableDataset):
                     struct_data_list = [[] for i in range(slice_pts[slice_id + 1] - slice_pts[slice_id])]
             if has_data_file:
                 i_list = np.array([i for i in range(slice_pts[slice_id + 1] - slice_pts[slice_id])])
-                if self.shuffle:
+                if self.internal_shuffle:
                     np.random.seed()
                     perm = np.random.permutation(len(i_list))
                     i_list = np.array(i_list)[perm].tolist()

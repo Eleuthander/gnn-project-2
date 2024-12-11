@@ -111,7 +111,10 @@ class MultiHeadAttentionLayer(nn.Module):
         
 
         # scale scores by sqrt(d)
-        g.apply_edges(scaling('score', np.sqrt(self.out_dim)))
+        g.apply_edges(scaling('score', np.sqrt(self.out_dim)), edges=real_ids)
+
+        # if self.full_graph:
+        #     g.apply_edges(scaling('score', 1e3 * np.sqrt(self.out_dim)), edges=fake_ids)
         
         # Use available edge features to modify the scores for edges
         g.apply_edges(imp_exp_attn('score', 'E'), edges=real_ids)

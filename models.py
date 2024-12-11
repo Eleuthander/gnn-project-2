@@ -1,8 +1,9 @@
 import math
 import numpy as np
 import torch
+from tqdm import tqdm
 from torch.nn import (ModuleList, Linear, Conv1d, MaxPool1d, Embedding, ReLU,
-                      Sequential, BatchNorm1d as BN)
+                      Sequential, LayerNorm, BatchNorm1d as BN)
 import torch.nn.functional as F
 from torch_geometric.nn import (GCNConv, SAGEConv, GINConv,
                                 global_sort_pool, global_add_pool, global_mean_pool)
@@ -24,8 +25,8 @@ def abstract_pair_data(data, z_emb_pair=None):
 
 class SANGraphormer(torch.nn.Module):
     def __init__(self, args, hidden_channels, num_layers, max_z, num_features,
-                 use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.1,
-                 GT_n_heads=4, full_graph=False, gamma=1e-5):
+                 use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.5,
+                 GT_n_heads=4, full_graph=False, layer_norm=False, gamma=1e-5):
         super(SANGraphormer, self).__init__()
 
         # Original params
@@ -41,6 +42,7 @@ class SANGraphormer(torch.nn.Module):
         # SAN params
         self.GT_n_heads = GT_n_heads
         self.full_graph = full_graph
+        self.layer_norm = layer_norm
         self.gamma = gamma
         self.dropout = dropout
 
@@ -56,18 +58,21 @@ class SANGraphormer(torch.nn.Module):
             initial_channels += self.rpe_hidden_dim * 2
             self.trainable_embedding = Sequential(Linear(in_features=self.num_step, out_features=self.rpe_hidden_dim), ReLU(), Linear(in_features=self.rpe_hidden_dim, out_features=self.rpe_hidden_dim))
 
-        #Embeddings
+        #Embeddings and normalizer
         self.z_embedding = Embedding(self.max_z, hidden_channels)
         self.x_embedding = Embedding(371, hidden_channels) # Hard coded the max number for court features since annoying
         self.e_embedding = Embedding(2, hidden_channels)  # For edge features
         self.h_embedding = Linear(initial_channels, hidden_channels) # To reshape h to hidden channels
+        if self.layer_norm == True:
+            self.initial_layer_norm = LayerNorm(hidden_channels)
        
         # SAN Layers
         self.layers = ModuleList([
             GraphTransformerLayer(
                 self.gamma, hidden_channels, hidden_channels, 
-                GT_n_heads, self.full_graph, dropout
-            ) for _ in range(num_layers-1)
+                GT_n_heads, self.full_graph, dropout,
+                layer_norm=self.layer_norm, batch_norm=True
+            ) for _ in range(num_layers)
         ])
 
         # Graphormer layer
@@ -95,6 +100,14 @@ class SANGraphormer(torch.nn.Module):
         for layer in self.layers:
             layer.reset_parameters()
         self.graphormer.reset_parameters()
+
+    def print_gradient_norms(self):
+        tqdm.write("\nLarge gradients:")
+        for name, param in self.named_parameters():
+            if param.grad is not None:
+                grad_norm = param.grad.norm().item()
+                if grad_norm > 10:  # Only print large gradients
+                    tqdm.write(f"{name}: grad norm = {grad_norm:.4f}")
 
     def forward(self, data):
 
@@ -143,8 +156,17 @@ class SANGraphormer(torch.nn.Module):
         e = g.edata['feat'].flatten().long().to(device) # See SAN train_SBMs_node_classification.py
         e = self.e_embedding(e).to(device)
         h = self.h_embedding(h)
-        for layer in self.layers:
+
+        #tqdm.write(f"Initial e stats: mean={e.abs().mean():.4f}, max={e.abs().max():.4f}")
+        #tqdm.write(f"Initial h stats: mean={h.abs().mean():.4f}, max={h.abs().max():.4f}")
+        if self.layer_norm:
+            e = self.initial_layer_norm(e)
+            h = self.initial_layer_norm(h)
+        #tqdm.write(f"After initial norm h stats: mean={h.abs().mean():.4f}, max={h.abs().max():.4f}")
+
+        for i, layer in enumerate(self.layers):
             h, e = layer(g, h, e)
+            #tqdm.write(f"After layer {i} h stats: mean={h.abs().mean():.4f}, max={h.abs().max():.4f}")
         
         if True:  # center pooling
             _, center_indices = np.unique(batch.cpu().numpy(), return_index=True)

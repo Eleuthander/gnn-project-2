@@ -6,7 +6,6 @@ from models import GCNGraphormer, SANGraphormer
 import argparse
 from types import SimpleNamespace
 from preprocess import preprocess
-from usage_monitoring import ResourceMonitor
 import time
 from functools import partial
 from tqdm import tqdm
@@ -24,12 +23,15 @@ import GPUtil
 import psutil
 import logging
 from datetime import datetime
+from torch.nn import Linear
 
 CHECKPOINT_DIR = './checkpoints'
 
-# Suppress annoying torch.load warning
+# Suppress annoying warnings; the deprecation warnings are ignorable since you are using an old version of torch
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning) # This is for a specific warning about optimizer and scheduler that was a false positive
 
 # ---------------------------
 # Logging Configuration
@@ -111,8 +113,6 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
     all_preds = []
 
     pbar = tqdm(loader, desc="Training", ncols=120)
-    monitor = ResourceMonitor(pbar, interval=5)
-    monitor.start()
 
     try:
         for i, batch in enumerate(pbar):
@@ -121,32 +121,35 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
             
             if scaler is not None:
                 with autocast():
-                    out = model(batch)
+                    out = model(batch).squeeze()
                     loss = criterion(out, batch.y.float())
                 scaler.scale(loss).backward()
                 
+                #model.print_gradient_norms()
                 # Unscale before measuring gradients
                 scaler.unscale_(optimizer)
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf'))  # Just measure
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                out = model(batch)
+                out = model(batch).squeeze()
                 loss = criterion(out, batch.y.float())
                 loss.backward()
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf'))  # Just measure
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
             
-            # Log gradient norm periodically
-            if i % 100 == 0:  # Every 100 batches
-                logging.info(f"Batch {i}, Gradient norm: {grad_norm:.4f}")
+            # Log gradient and usage periodically
+            if i > 0 and i % max(1, len(pbar) // 10) == 0:  # Every 10%
+                gpu = GPUtil.getGPUs()[0]
+                cpu_percent = psutil.cpu_percent()
+                memory = psutil.virtual_memory()
+                tqdm.write(f"Batch {i} | Gradient norm: {grad_norm:.4f} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
 
-            # Step scheduler per batch
             scheduler.step()
 
+            # Calculate loss and preds
             total_loss += loss.item()
-            
             preds = torch.sigmoid(out).detach().cpu()
             labels = batch.y.detach().cpu()
             all_preds.append(preds)
@@ -161,18 +164,17 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
             del out
             torch.cuda.empty_cache()
 
-    except:
-        logging.info("Training interrupted")
+    except Exception as e:
+        logging.info(f"Training interrupted: {e}")
         torch.save(model.state_dict(), 'interrupted_model.pth')
 
-        checkpoint_path = os.path.join(CHECKPOINT_DIR, f'interruption_time_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth')
+        checkpoint_path = os.path.join(CHECKPOINT_DIR, f'interruption_time_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pth')
         torch.save({
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
         }, checkpoint_path)
     finally:
-        monitor.stop()
         pbar.close()
         torch.cuda.empty_cache()
         gc.collect()
@@ -201,24 +203,30 @@ def validate(model, loader, criterion, device):
     all_preds = []
 
     pbar = tqdm(loader, desc="Validation", ncols=120)
-    monitor = ResourceMonitor(pbar, interval=5)
-    monitor.start()
 
     try:
         with torch.no_grad():
-            for batch in pbar:
+            for i, batch in enumerate(pbar):
                 batch = batch.to(device)
                 with autocast():
-                    out = model(batch)
+                    out = model(batch).squeeze() # logits are returned as [batch_size, 1] so need squeeze
                     loss = criterion(out, batch.y.float())
+
+                # Log gradient and usage periodically
+                if i > 0 and i % max(1, len(pbar) // 10) == 0:
+                    gpu = GPUtil.getGPUs()[0]
+                    cpu_percent = psutil.cpu_percent()
+                    memory = psutil.virtual_memory()
+                    tqdm.write(f"Batch {i} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
+
+                # Calculate loss and preds
                 total_loss += loss.item()
-                
                 preds = torch.sigmoid(out).detach().cpu()
                 labels = batch.y.detach().cpu()
                 all_preds.append(preds)
                 all_labels.append(labels)
-                
-                # Update progress bar postfix with loss and resource usage
+
+                # Update progress bar
                 current_loss = total_loss / (len(all_preds))
                 pbar.set_postfix({'loss': f"{current_loss:.4f}"})
 
@@ -227,14 +235,10 @@ def validate(model, loader, criterion, device):
                 del out
                 torch.cuda.empty_cache()
 
-    except:
-        logging.info("Validation interrupted")
+    except Exception as e:
+        logging.info(f"Validation interrupted: {e}")
     finally:
-        # Always stop monitoring
-        monitor.stop()
         pbar.close()
-
-        # Final cleanup
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -262,24 +266,30 @@ def test(model, loader, criterion, device):
     all_preds = []
 
     pbar = tqdm(loader, desc="Testing", ncols=120)
-    monitor = ResourceMonitor(pbar, interval=5)
-    monitor.start()
 
     try:
         with torch.no_grad():
-            for batch in pbar:
+            for i, batch in enumerate(pbar):
                 batch = batch.to(device)
                 with autocast():
-                    out = model(batch)
+                    out = model(batch).squeeze()
                     loss = criterion(out, batch.y.float())
+
+                # Log gradient and usage periodically
+                if i > 0 and i % max(1, len(pbar) // 10) == 0:
+                    gpu = GPUtil.getGPUs()[0]
+                    cpu_percent = psutil.cpu_percent()
+                    memory = psutil.virtual_memory()
+                    tqdm.write(f"Batch {i} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
+
+                # Calculate loss and preds
                 total_loss += loss.item()
-                
                 preds = torch.sigmoid(out).detach().cpu()
                 labels = batch.y.detach().cpu()
                 all_preds.append(preds)
                 all_labels.append(labels)
-                
-                # Update progress bar postfix with loss and resource usage
+
+                # Update progress bar
                 current_loss = total_loss / (len(all_preds))
                 pbar.set_postfix({'loss': f"{current_loss:.4f}"})
 
@@ -288,14 +298,10 @@ def test(model, loader, criterion, device):
                 del out
                 torch.cuda.empty_cache()
 
-    except:
-        logging.info("Testing interrupted")
+    except Exception as e:
+        logging.info(f"Testing interrupted: {e}")
     finally:
-        # Always stop monitoring
-        monitor.stop()
         pbar.close()
-
-        # Final cleanup
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -308,6 +314,16 @@ def test(model, loader, criterion, device):
         auc, ap = 0, 0
 
     return total_loss / len(loader), auc, ap
+
+# ---------------------------
+# Weight Initialization Function
+# ---------------------------
+
+def init_weights(m):
+    if isinstance(m, Linear):
+        torch.nn.init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            torch.nn.init.zeros_(m.bias)
 
 # ---------------------------
 # Main Function
@@ -327,31 +343,32 @@ def main():
     logging.info(f"Using device: {device}")
 
     # Load data
-    data = torch.load('fed_cites_graph_processed.pt')
+    data = torch.load('fed_cites_graph_sample.pt')
     logging.info(f"Loaded data: {data}")
 
     # Create default args for GCNGraphormer
     args = SimpleNamespace(
         # Model args
-        model = 'GCNGraphormer',  # or 'SANGraphormer'
+        model = 'SANGraphormer',  # either 'SANGraphormer' or 'GCNGraphormer'
         hidden_channels=64, # transformer block dims (64-128 reasonable) \ embedding dim in GCN (32 reasonable)
         num_layers=3,
-        dropout=0.2,
+        dropout=0.5,
         full_graph=True, # whether to add fake edges to SAN
-        gamma=1e-6, # between 0 and 1:  0 is fully sparse, 1 fully (10e-7 through 1-05 reasonable)
+        layer_norm=False, # whether to implement layer norms in the SAN; batch norm always implemented
+        gamma=1e-11, # between 0 and 1:  0 is fully sparse, 1 fully (1e-12 through 1e-11 reasonable for this impl)
         GT_n_heads = 4, # Num heads for SAN module (4-8 reasonable)
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
         # Subgraph args
         num_hops = 2,
-        max_nodes_per_hop = 10,
+        max_nodes_per_hop = 32,
         max_z=1000,  # Max value for structural encoding
 
         # Batching args
-        batch_size=128,
-        num_workers=12,
+        batch_size=512,
+        num_workers=8,
         pin_memory=True,
-        prefetch_factor=4,
+        prefetch_factor=2,
         persistent_workers=True,
         sample_type = 2, # 0 is standard; 2 is "k_hop_subgraph_sampler_tensor"
 
@@ -374,10 +391,10 @@ def main():
         num_step = 1,
 
         # Training args
-        initial_lr=0.001,
+        initial_lr=1e-3,
         min_lr=1e-6,
-        warmup_iterations=100,
-        T_0=10,
+        warmup_proportion=0.2, # what proportion of first epoch you want used for warmup
+        T_0=1.0, # what proportion of an epoch you want for cosine period in scheduler
         weight_decay=5e-4,
         num_epochs=5,
         early_stopping_patience=3,  # Number of epochs to wait for improvement
@@ -386,21 +403,9 @@ def main():
     # Create splits
     logging.info("Creating splits...")
     dataset = [data]  # Wrap in list for do_edge_split
-    split_edge = do_edge_split(dataset, fast_split=True, val_ratio=0.01, test_ratio=0.01, neg_ratio=1)
+    split_edge = do_edge_split(dataset, fast_split=True, val_ratio=0.1, test_ratio=0.1, neg_ratio=1)
     data.edge_index = split_edge['train']['edge'].t()
     logging.info("Created splits")
-
-    # Adjust edge_index and edge_weight for testing by including validation edges
-    logging.info("Including validation edges into training edges for testing...")
-    val_edge_index = split_edge['valid']['edge'].t()
-    data.edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
-    
-    if hasattr(data, 'edge_weight'):
-        val_edge_weight = torch.ones([val_edge_index.size(1), 1], dtype=data.edge_weight.dtype, device=data.edge_weight.device)
-        data.edge_weight = torch.cat([data.edge_weight, val_edge_weight], dim=0)
-    else:
-        data.edge_weight = torch.ones([data.edge_index.size(1), 1], dtype=torch.float)
-    logging.info("Included validation edges into training edges.")
 
     # Determine preprocessing function
     preprocess_fn = partial(preprocess,
@@ -430,9 +435,10 @@ def main():
         max_nodes_per_hop=args.max_nodes_per_hop,
         preprocess_fn=preprocess_fn,
         sample_type=args.sample_type,
-        shuffle=True,
+        internal_shuffle=True,
         slice_type=0
     )
+
     val_dataset = SEALIterableDataset(
         root='./temp_seal_data/val',
         data=data,
@@ -446,9 +452,19 @@ def main():
         max_nodes_per_hop=args.max_nodes_per_hop,
         preprocess_fn=preprocess_fn,
         sample_type=args.sample_type,
-        shuffle=False,
+        internal_shuffle=False,
         slice_type=0
     )
+
+    # Adjust edge_index and edge_weight for testing by including validation edges
+    logging.info("Including validation edges into training edges for testing...")
+    val_edge_index = split_edge['valid']['edge'].t()
+    data.edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
+    if 'edge_weight' in data.keys():
+        val_edge_weight = torch.ones([val_edge_index.size(1), 1], dtype=data.edge_weight.dtype, device=data.edge_weight.device)
+        data.edge_weight = torch.cat([data.edge_weight, val_edge_weight], dim=0)
+    logging.info("Included validation edges into training edges.")
+
     test_dataset = SEALIterableDataset(
         root='./temp_seal_data/test',
         data=data,
@@ -462,7 +478,7 @@ def main():
         max_nodes_per_hop=args.max_nodes_per_hop,
         preprocess_fn=preprocess_fn,
         sample_type=args.sample_type,
-        shuffle=False,
+        internal_shuffle=False,
         slice_type=0
     )
     logging.info("Created datasets.")
@@ -473,7 +489,7 @@ def main():
         train_loader = PygDataLoader(
             train_dataset,
             batch_size=args.batch_size,
-            shuffle=True,
+            # shuffle=False, Shuffling is done in a custom way within the dataset
             num_workers=args.num_workers,
             pin_memory=args.pin_memory,
             prefetch_factor=args.prefetch_factor,
@@ -482,7 +498,7 @@ def main():
         val_loader = PygDataLoader(
             val_dataset,
             batch_size=args.batch_size,
-            shuffle=False,
+            # shuffle=False,
             num_workers=args.num_workers,
             pin_memory=args.pin_memory,
             prefetch_factor=args.prefetch_factor,
@@ -491,7 +507,7 @@ def main():
         test_loader = PygDataLoader(
             test_dataset,
             batch_size=args.batch_size,
-            shuffle=False,
+            # shuffle=False,
             num_workers=args.num_workers,
             pin_memory=args.pin_memory,
             prefetch_factor=args.prefetch_factor,
@@ -501,7 +517,7 @@ def main():
         train_loader = PygDataLoader(
             train_dataset,
             batch_size=args.batch_size,
-            shuffle=True,
+            # shuffle=False, # shuffling done in a custom way within the dataset
             num_workers=0,
             pin_memory=args.pin_memory,
             prefetch_factor=None
@@ -509,7 +525,7 @@ def main():
         val_loader = PygDataLoader(
             val_dataset,
             batch_size=args.batch_size,
-            shuffle=False,
+            # shuffle=False,
             num_workers=0,
             pin_memory=args.pin_memory,
             prefetch_factor=None
@@ -517,7 +533,7 @@ def main():
         test_loader = PygDataLoader(
             test_dataset,
             batch_size=args.batch_size,
-            shuffle=False,
+            # shuffle=False,
             num_workers=0,
             pin_memory=args.pin_memory,
             prefetch_factor=None
@@ -552,11 +568,13 @@ def main():
             dropout=args.dropout,
             GT_n_heads=args.GT_n_heads,
             full_graph=args.full_graph,
+            layer_norm=args.layer_norm,
             gamma=args.gamma
         ).to(device)
     else:
         logging.error("Error: Model not recognized.")
         exit()
+    model.apply(init_weights)
     logging.info("Created Model")
 
     # Count and log model parameters
@@ -569,21 +587,22 @@ def main():
     scaler = GradScaler() if device.type == 'cuda' else None
 
     # Initialize Learning Rate Scheduler (Per Batch)
+    iterations_per_epoch = len(train_loader)
     warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
         optimizer, 
         start_factor=0.1,
         end_factor=1.0, 
-        total_iters=args.warmup_iterations,
+        total_iters=args.warmup_proportion * iterations_per_epoch,
     )
     cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer, 
-        T_0=5,
+        T_0=args.T_0 * iterations_per_epoch,
         eta_min=args.min_lr
     )
     scheduler = torch.optim.lr_scheduler.SequentialLR(
         optimizer,
         schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[5]
+        milestones=[args.warmup_proportion * iterations_per_epoch]
     )
     logging.info("Initialized sequential scheduler with warmup and cosine annealing")
 
@@ -614,7 +633,7 @@ def main():
 
             # Save best model
             torch.save(model.state_dict(), 'best_model.pth')
-            checkpoint_path = os.path.join(CHECKPOINT_DIR, f'checkpoint_epoch_{epoch}_time_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth')
+            checkpoint_path = os.path.join(CHECKPOINT_DIR, f'checkpoint_epoch_{epoch}_time_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pth')
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
