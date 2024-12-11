@@ -145,7 +145,7 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
                 #model.print_gradient_norms()
                 # Unscale before measuring gradients
                 scaler.unscale_(optimizer)
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 2.5)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 
                 scaler.step(optimizer)
                 scaler.update()
@@ -153,16 +153,9 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
                 out = model(batch).squeeze()
                 loss = criterion(out, batch.y.float())
                 loss.backward()
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 2.5)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
             
-            # Log gradient and usage periodically
-            if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
-                gpu = GPUtil.getGPUs()[0]
-                cpu_percent = psutil.cpu_percent()
-                memory = psutil.virtual_memory()
-                tqdm.write(f"Batch {i} | Gradient norm: {grad_norm:.4f} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
-
             scheduler.step()
 
             # Calculate loss and preds
@@ -175,6 +168,13 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
             # Update progress bar
             current_loss = total_loss / (len(all_preds))
             pbar.set_postfix({'loss': f"{current_loss:.4f}"})
+
+            # Print gradients, loss, and usage periodically
+            if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
+                gpu = GPUtil.getGPUs()[0]
+                cpu_percent = psutil.cpu_percent()
+                memory = psutil.virtual_memory()
+                tqdm.write(f"Batch {i} | Gradient norm: {grad_norm:.4f} | Loss: {current_loss:.4f} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
 
             # Memory cleanup
             del batch
@@ -229,13 +229,6 @@ def validate(model, loader, criterion, device):
                     out = model(batch).squeeze() # logits are returned as [batch_size, 1] so need squeeze
                     loss = criterion(out, batch.y.float())
 
-                # Log gradient and usage periodically
-                if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
-                    gpu = GPUtil.getGPUs()[0]
-                    cpu_percent = psutil.cpu_percent()
-                    memory = psutil.virtual_memory()
-                    tqdm.write(f"Batch {i} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
-
                 # Calculate loss and preds
                 total_loss += loss.item()
                 preds = torch.sigmoid(out).detach().cpu()
@@ -246,6 +239,13 @@ def validate(model, loader, criterion, device):
                 # Update progress bar
                 current_loss = total_loss / (len(all_preds))
                 pbar.set_postfix({'loss': f"{current_loss:.4f}"})
+
+                # Prin loss and usage periodically
+                if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
+                    gpu = GPUtil.getGPUs()[0]
+                    cpu_percent = psutil.cpu_percent()
+                    memory = psutil.virtual_memory()
+                    tqdm.write(f"Batch {i} | Loss: {current_loss:.4f} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
 
                 # Clear GPU memory
                 del batch
@@ -292,13 +292,6 @@ def test(model, loader, criterion, device):
                     out = model(batch).squeeze()
                     loss = criterion(out, batch.y.float())
 
-                # Log gradient and usage periodically
-                if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
-                    gpu = GPUtil.getGPUs()[0]
-                    cpu_percent = psutil.cpu_percent()
-                    memory = psutil.virtual_memory()
-                    tqdm.write(f"Batch {i} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
-
                 # Calculate loss and preds
                 total_loss += loss.item()
                 preds = torch.sigmoid(out).detach().cpu()
@@ -309,6 +302,13 @@ def test(model, loader, criterion, device):
                 # Update progress bar
                 current_loss = total_loss / (len(all_preds))
                 pbar.set_postfix({'loss': f"{current_loss:.4f}"})
+
+                # Print loss and usage periodically
+                if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
+                    gpu = GPUtil.getGPUs()[0]
+                    cpu_percent = psutil.cpu_percent()
+                    memory = psutil.virtual_memory()
+                    tqdm.write(f"Batch {i} | Loss: {current_loss:.4f} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
 
                 # Clear GPU memory
                 del batch
@@ -345,22 +345,22 @@ def init_weights(m, model, full_graph):
             torch.nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
                 torch.nn.init.zeros_(m.bias)
-    # For SAN with full_graph = True, this is pretty good, with dropout = 0.8, 5 layers and using features, you start around loss 6 and go down slowly
+    # For SAN with full_graph = True, this is pretty good, with dropout = 0.8, 4 layers and using features, you start around loss 6 and go down slowly
     elif model=='SANGraphormer' and full_graph:
         if isinstance(m, Linear):
             if hasattr(m, 'final_layer') and m.final_layer:
                 # Xavier/Glorot initialization with larger gain for final layer
-                torch.nn.init.xavier_uniform_(m.weight, gain=3.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=5.0)
                 if m.bias is not None:
                     fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(m.weight)
                     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
                     torch.nn.init.uniform_(m.bias, -bound, bound)
             else:
                 # Standard Xavier/Glorot for other layers
-                torch.nn.init.xavier_uniform_(m.weight, gain=2.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=3.0)
                 if m.bias is not None:
                     torch.nn.init.zeros_(m.bias)
-    # For SAN with full_graph = False, this is pretty good, with dropout = 0.8, 5 layers and using features, you start around loss _ and go slowly down
+    # For SAN with full_graph = False, this is pretty good, with dropout = 0.8, 4 layers and using features, you start around loss _ and go slowly down
     elif model=='SANGraphormer' and not full_graph:
         if isinstance(m, Linear):
             if hasattr(m, 'final_layer') and m.final_layer:
@@ -372,7 +372,7 @@ def init_weights(m, model, full_graph):
                     torch.nn.init.uniform_(m.bias, -bound, bound)
             else:
                 # Standard Xavier/Glorot for other layers
-                torch.nn.init.xavier_uniform_(m.weight, gain=3.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=5.0)
                 if m.bias is not None:
                     torch.nn.init.zeros_(m.bias)
     else:
@@ -401,9 +401,9 @@ def main():
         hidden_channels=64, # transformer block dims (32 reasonable) \ embedding dim in GCN (32 reasonable)
         num_layers=3, # 5 for SAN, 3 for GCN
         dropout=0.2, # 0.8 for SAN, 0.2 for GCN
-        full_graph=True, # whether to add fake edges to SAN
+        full_graph=False, # whether to add fake edges to SAN
         layer_norm=True, # whether to implement layer norms in the SAN; batch norm always implemented
-        gamma=1e-11, # between 0 and 1:  0 is fully sparse, 1 fully (1e-12 through 1e-11 reasonable for this impl)
+        gamma=1e-12, # between 0 and 1:  0 is fully sparse, 1 fully (1e-12 through 1e-11 reasonable for this impl)
         GT_n_heads = 2, # Num heads for SAN module (2 reasonable)
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
@@ -451,6 +451,7 @@ def main():
     # Take command line args
     parser = argparse.ArgumentParser(description="Override default arguments.")
     parser.add_argument("--model", type=str, default=args.model, help="Name of the model")
+    parser.add_argument("--full_graph", action="store_true", default=args.full_graph, help="Adds false edges to SAN")
     parser.add_argument("--hidden_channels", type=int, default=args.hidden_channels, help="Hidden dimmension")
     parser.add_argument("--num_layers", type=int, default=args.num_layers, help="Depth of the model")
     parser.add_argument("--dropout", type=float, default=args.dropout, help="Dropout for layers")
@@ -506,7 +507,6 @@ def main():
         internal_shuffle=True,
         slice_type=0
     )
-
     val_dataset = SEALIterableDataset(
         root='./temp_seal_data/val',
         data=data,
@@ -523,16 +523,6 @@ def main():
         internal_shuffle=False,
         slice_type=0
     )
-
-    # Adjust edge_index and edge_weight for testing by including validation edges
-    logging.info("Including validation edges into training edges for testing...")
-    val_edge_index = split_edge['valid']['edge'].t()
-    data.edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
-    if 'edge_weight' in data.keys():
-        val_edge_weight = torch.ones([val_edge_index.size(1), 1], dtype=data.edge_weight.dtype, device=data.edge_weight.device)
-        data.edge_weight = torch.cat([data.edge_weight, val_edge_weight], dim=0)
-    logging.info("Included validation edges into training edges.")
-
     test_dataset = SEALIterableDataset(
         root='./temp_seal_data/test',
         data=data,
