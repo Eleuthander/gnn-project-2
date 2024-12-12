@@ -470,7 +470,7 @@ def main():
     # Create splits
     logging.info("Creating splits...")
     dataset = [data]  # Wrap in list for do_edge_split
-    split_edge = do_edge_split(dataset, val_ratio=0.1, test_ratio=0.1, neg_ratio=1)
+    split_edge = do_edge_split(dataset, val_ratio=0.1, test_ratio=0.2, neg_ratio=1)
     data.edge_index = split_edge['train']['edge'].t()
     logging.info("Created splits")
 
