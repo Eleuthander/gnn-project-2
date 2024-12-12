@@ -1,12 +1,11 @@
 import torch
 from torch_geometric.loader import DataLoader as PygDataLoader
 from dataset import SEALDynamicDataset, SEALIterableDataset
-from utils import *
+from utilities.utils import *
 from models import GCNGraphormer, SANGraphormer
 import argparse
 from types import SimpleNamespace
-from preprocess import preprocess
-from usage_monitoring import ResourceMonitor
+from utilities.preprocess import preprocess
 import time
 from functools import partial
 from tqdm import tqdm

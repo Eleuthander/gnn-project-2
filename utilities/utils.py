@@ -18,7 +18,7 @@ from torch_geometric.loader import DataLoader as PygDataLoader
 from torch_geometric.data import Data as PygData
 from torch_geometric.utils import (negative_sampling, add_self_loops,
                                    train_test_split_edges)
-from collection import Collections
+from utilities.collection import Collections
 import copy as cp
 import pdb
 

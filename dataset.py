@@ -24,7 +24,7 @@ from torch_geometric.data import Data, Dataset, InMemoryDataset
 from torch_sparse import coalesce
 # from surel_gacc import run_sample, sjoin, run_walk
 # from rpe import get_link_subgraph_rpe
-from utils import *
+from utilities.utils import *
 
 class SEALIterableDataset(IterableDataset):
     def __init__(self, root, data, split_edge, num_hops, percent=100, split='train', 

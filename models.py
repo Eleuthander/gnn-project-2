@@ -8,9 +8,9 @@ import torch.nn.functional as F
 from torch_geometric.nn import (GCNConv, SAGEConv, GINConv,
                                 global_sort_pool, global_add_pool, global_mean_pool)
 from torch_geometric.data import Data
-from graphormer.model import Graphormer
-from graph_transformer_layer import GraphTransformerLayer
-from pyg_to_dgl import pyg_to_dgl
+from utilities.graphormer.model import Graphormer
+from utilities.graph_transformer_layer import GraphTransformerLayer
+from utilities.pyg_to_dgl import pyg_to_dgl
 import pdb
 
 def abstract_pair_data(data, z_emb_pair=None):

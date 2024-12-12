@@ -29,9 +29,9 @@ import warnings
 from scipy.sparse import SparseEfficiencyWarning
 warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
-from utils import *
+from utilities.utils import *
 import networkx as nx
-from collection import Collections
+from utilities.collection import Collections
 
 
 #@TimerGuard('process_paths3', 'utils')
