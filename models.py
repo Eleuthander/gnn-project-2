@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from torch.nn import (ModuleList, Linear, Conv1d, MaxPool1d, Embedding, ReLU,
-                      Sequential, LayerNorm, BatchNorm1d as BN)
+                      Sequential, LayerNorm, BatchNorm1d)
 import torch.nn.functional as F
 from torch_geometric.nn import (GCNConv, SAGEConv, GINConv,
                                 global_sort_pool, global_add_pool, global_mean_pool)
@@ -217,6 +217,7 @@ class GCNGraphormer(torch.nn.Module):
             initial_channels += self.rpe_hidden_dim * 2
             self.trainable_embedding = Sequential(Linear(in_features=self.num_step, out_features=self.rpe_hidden_dim), ReLU(), Linear(in_features=self.rpe_hidden_dim, out_features=self.rpe_hidden_dim))
 
+        self.input_normalizer = BatchNorm1d(initial_channels)
         self.convs.append(GCNConv(initial_channels, hidden_channels))
         for _ in range(num_layers - 1):
             self.convs.append(GCNConv(hidden_channels, hidden_channels))
@@ -269,6 +270,7 @@ class GCNGraphormer(torch.nn.Module):
             x_rpe_emb = self.trainable_embedding(x_rpe).view(x_rpe.shape[0], -1)
             h = torch.cat([h, x_rpe_emb], 1)
 
+        h = self.input_normalizer(h)
         for conv in self.convs[:-1]:
             h = conv(h, edge_index, edge_weight)
             h = F.relu(h)

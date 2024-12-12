@@ -171,10 +171,16 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
 
             # Print gradients, loss, and usage periodically
             if i > 0 and i % 100 == 0:  # max(1, len(pbar) // 10)
+            
+                # Calculate metrics on accumulated predictions
+                batch_preds = torch.cat(all_preds[-100:], dim=0).numpy()  # Last 100 batches
+                batch_labels = torch.cat(all_labels[-100:], dim=0).numpy()
+                batch_auc, batch_ap = evaluate_metrics(batch_labels, batch_preds)
+                
                 gpu = GPUtil.getGPUs()[0]
                 cpu_percent = psutil.cpu_percent()
                 memory = psutil.virtual_memory()
-                tqdm.write(f"Batch {i} | Gradient norm: {grad_norm:.4f} | Loss: {current_loss:.4f} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
+                tqdm.write(f"Batch {i} | Gradient norm: {grad_norm:.4f} | Loss: {current_loss:.4f} | AUC: {batch_auc:.4f} | AP: {batch_ap:.4f} | GPU: {gpu.load*100:.1f}% | Mem: {gpu.memoryUtil*100:.1f}% | CPU: {cpu_percent:.1f}% | RAM: {memory.percent:.1f}%")
 
             # Memory cleanup
             del batch
@@ -337,40 +343,37 @@ def test(model, loader, criterion, device):
 # ---------------------------
 
 def init_weights(m, model, full_graph):
-    # For GCN, this is pretty good, with dropout = 0.2, 3 layers and using features, 64 hidden dim, loss drops rapidly
     if model=='GCNGraphormer':
         if isinstance(m, Linear):
             torch.nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
                 torch.nn.init.zeros_(m.bias)
-    # For SAN with full_graph = True, this is pretty good, with dropout = 0.8, 4 layers and using features, you start around loss 6 and go down slowly
     elif model=='SANGraphormer' and full_graph:
         if isinstance(m, Linear):
             if hasattr(m, 'final_layer') and m.final_layer:
                 # Xavier/Glorot initialization with larger gain for final layer
-                torch.nn.init.xavier_uniform_(m.weight, gain=5.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=1.0)
                 if m.bias is not None:
                     fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(m.weight)
                     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
                     torch.nn.init.uniform_(m.bias, -bound, bound)
             else:
                 # Standard Xavier/Glorot for other layers
-                torch.nn.init.xavier_uniform_(m.weight, gain=3.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=1.0)
                 if m.bias is not None:
                     torch.nn.init.zeros_(m.bias)
-    # For SAN with full_graph = False, this is pretty good, with dropout = 0.8, 4 layers and using features, you start around loss _ and go slowly down
     elif model=='SANGraphormer' and not full_graph:
         if isinstance(m, Linear):
             if hasattr(m, 'final_layer') and m.final_layer:
                 # Xavier/Glorot initialization with larger gain for final layer
-                torch.nn.init.xavier_uniform_(m.weight, gain=8.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=1.0)
                 if m.bias is not None:
                     fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(m.weight)
                     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
                     torch.nn.init.uniform_(m.bias, -bound, bound)
             else:
                 # Standard Xavier/Glorot for other layers
-                torch.nn.init.xavier_uniform_(m.weight, gain=4.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=1.0)
                 if m.bias is not None:
                     torch.nn.init.zeros_(m.bias)
     else:
@@ -396,13 +399,13 @@ def main():
 
         # Model args
         model = 'SANGraphormer',  # either 'SANGraphormer' or 'GCNGraphormer'
-        hidden_channels=64, # transformer block dims (32 reasonable) \ embedding dim in GCN (32 reasonable)
-        num_layers=3, # 5 for SAN, 3 for GCN
-        dropout=0.2, # 0.8 for SAN, 0.2 for GCN
+        hidden_channels=64, # transformer block dims (32-64 reasonable) \ embedding dim in GCN (32-64 reasonable)
+        num_layers=3, # 4 for SAN, 3 for GCN
+        dropout=0.2, # 0.7 for SAN, 0.3 for GCN
         full_graph=False, # whether to add fake edges to SAN
         layer_norm=True, # whether to implement layer norms in the SAN; batch norm always implemented
-        gamma=1e-12, # between 0 and 1:  0 is fully sparse, 1 fully (1e-12 through 1e-11 reasonable for this impl)
-        GT_n_heads = 4, # Num heads for SAN module (2-4 reasonable)
+        gamma=1e-11, # between 0 and 1:  0 is fully sparse, 1 fully (1e- through 1e- reasonable for this impl)
+        GT_n_heads = 6, # Num heads for SAN module (3-6 reasonable)
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
         # Subgraph args
@@ -411,7 +414,7 @@ def main():
         max_z=1000,  # Max value for structural encoding
 
         # Batching args
-        batch_size=512,
+        batch_size=256,
         num_workers=8,
         pin_memory=True,
         prefetch_factor=2,
@@ -437,13 +440,13 @@ def main():
         num_step = 1,
 
         # Training args
-        initial_lr=1e-4,
+        initial_lr=5e-5,
         min_lr=1e-6,
-        warmup_proportion=0.4, # what proportion of first epoch you want used for warmup
+        warmup_proportion=1.0, # what proportion of an epoch you want used for warmup
         T_0=1.0, # what proportion of an epoch you want for cosine period in scheduler
         weight_decay=1e-4,
         num_epochs=5,
-        early_stopping_patience=5,  # Number of epochs to wait for improvement
+        early_stopping_patience=6,  # Number of epochs to wait for improvement
     )
 
     # Take command line args
@@ -454,6 +457,8 @@ def main():
     parser.add_argument("--num_layers", type=int, default=args.num_layers, help="Depth of the model")
     parser.add_argument("--dropout", type=float, default=args.dropout, help="Dropout for layers")
     parser.add_argument("--seed", type=int, default=args.dropout, help="Randomization replicator")
+    parser.add_argument("--use_time_feature", action="store_false", default=args.use_time_feature, help="Use time_feature as PE in SAN")
+    parser.add_argument("--num_epochs", type=int, default=args.num_epochs, help="Epochs")
 
     parsed_args = parser.parse_args()
     for key, value in vars(parsed_args).items():
