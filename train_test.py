@@ -406,8 +406,8 @@ def main():
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
         # Subgraph args
-        num_hops = 2,
-        max_nodes_per_hop = 24,
+        num_hops = 1,
+        max_nodes_per_hop = 500,
         max_z=1000,  # Max value for structural encoding
 
         # Batching args
@@ -464,7 +464,7 @@ def main():
     set_seed(args.seed)
 
     # Load data
-    data = torch.load('scotus_graph_processed.pt')
+    data = torch.load('appellate_graph_final.pt')
     logging.info(f"Loaded data: {data}")
 
     # Create splits
