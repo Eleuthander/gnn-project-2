@@ -26,7 +26,7 @@ def abstract_pair_data(data, z_emb_pair=None):
 class SANGraphormer(torch.nn.Module):
     def __init__(self, args, hidden_channels, num_layers, max_z, num_features,
                  use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.5,
-                 GT_n_heads=4, full_graph=False, layer_norm=False, gamma=1e-5):
+                 GT_n_heads=4, full_graph=False, layer_norm=True, gamma=1e-5):
         super(SANGraphormer, self).__init__()
 
         # Original params

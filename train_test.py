@@ -138,8 +138,8 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
             
             if scaler is not None:
                 with autocast():
-                    out = model(batch).squeeze()
-                    loss = criterion(out, batch.y.float())
+                    out = model(batch).squeeze().view(-1)
+                    loss = criterion(out, batch.y.float().view(-1))
                 scaler.scale(loss).backward()
                 
                 #model.print_gradient_norms()
@@ -150,8 +150,8 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                out = model(batch).squeeze()
-                loss = criterion(out, batch.y.float())
+                out = model(batch).view(-1)
+                loss = criterion(out, batch.y.float().view(-1))
                 loss.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
@@ -160,8 +160,8 @@ def train(model, loader, optimizer, scheduler, criterion, device, scaler=None):
 
             # Calculate loss and preds
             total_loss += loss.item()
-            preds = torch.sigmoid(out).detach().cpu()
-            labels = batch.y.detach().cpu()
+            preds = torch.sigmoid(out).detach().cpu().view(-1)
+            labels = batch.y.detach().cpu().view(-1)
             all_preds.append(preds)
             all_labels.append(labels)
 
@@ -232,13 +232,13 @@ def validate(model, loader, criterion, device):
             for i, batch in enumerate(pbar):
                 batch = batch.to(device)
                 with autocast():
-                    out = model(batch).squeeze() # logits are returned as [batch_size, 1] so need squeeze
-                    loss = criterion(out, batch.y.float())
-
+                    out = model(batch).view(-1) # logits are returned as [batch_size, 1] so need squeeze
+                    loss = criterion(out, batch.y.float().view(-1))
+                
                 # Calculate loss and preds
                 total_loss += loss.item()
-                preds = torch.sigmoid(out).detach().cpu()
-                labels = batch.y.detach().cpu()
+                preds = torch.sigmoid(out).detach().cpu().view(-1)
+                labels = batch.y.detach().cpu().view(-1)
                 all_preds.append(preds)
                 all_labels.append(labels)
 
@@ -295,13 +295,13 @@ def test(model, loader, criterion, device):
             for i, batch in enumerate(pbar):
                 batch = batch.to(device)
                 with autocast():
-                    out = model(batch).squeeze()
-                    loss = criterion(out, batch.y.float())
+                    out = model(batch).view(-1)
+                    loss = criterion(out, batch.y.float().view(-1))
 
                 # Calculate loss and preds
                 total_loss += loss.item()
-                preds = torch.sigmoid(out).detach().cpu()
-                labels = batch.y.detach().cpu()
+                preds = torch.sigmoid(out).detach().cpu().view(-1)
+                labels = batch.y.detach().cpu().view(-1)
                 all_preds.append(preds)
                 all_labels.append(labels)
 
@@ -404,7 +404,7 @@ def main():
         dropout=0.2, # 0.7 for SAN, 0.3 for GCN
         full_graph=False, # whether to add fake edges to SAN
         layer_norm=True, # whether to implement layer norms in the SAN; batch norm always implemented
-        gamma=1e-11, # between 0 and 1:  0 is fully sparse, 1 fully (1e- through 1e- reasonable for this impl)
+        gamma=1e-7, # between 0 and 1:  0 is fully sparse, 1 fully connected (1e- through 1e- reasonable for this impl)
         GT_n_heads = 6, # Num heads for SAN module (3-6 reasonable)
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
@@ -440,7 +440,7 @@ def main():
         num_step = 1,
 
         # Training args
-        initial_lr=5e-5,
+        initial_lr=1e-4,
         min_lr=1e-6,
         warmup_proportion=1.0, # what proportion of an epoch you want used for warmup
         T_0=1.0, # what proportion of an epoch you want for cosine period in scheduler
