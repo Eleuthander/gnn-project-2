@@ -3,29 +3,15 @@ import scipy.sparse as ssp
 import torch
 from torch_geometric.loader import DataLoader as PygDataLoader
 from tqdm import tqdm
-from sklearn.metrics import roc_auc_score
-from utils import do_edge_split
+from sklearn.metrics import roc_auc_score, average_precision_score
+from utilities.utils import do_edge_split
 
 def common_neighbors_large(A, edge_index, batch_size=1000, cn_types=['in', 'out', 'undirected']):
-    """
-    Memory-efficient Common Neighbors implementation for large graphs.
-    
-    Parameters:
-    -----------
-    A : scipy.sparse.csr_matrix
-        Adjacency matrix of the graph (sparse format)
-    edge_index : torch.Tensor
-        Edge indices to compute scores for, shape [2, num_edges]
-    batch_size : int
-        Batch size for processing edges (reduced for large graphs)
-    cn_types : list
-        Types of common neighbors to compute
-    """
+    """Same implementation as before"""
     num_nodes = A.shape[0]
     A = A.tocsr()
     A_t = A.transpose().tocsr()
 
-    # Only compute undirected version if needed
     if 'undirected' in cn_types:
         x_ind, y_ind = A.nonzero()
         weights = np.array(A[x_ind, y_ind]).flatten()
@@ -61,71 +47,62 @@ def common_neighbors_large(A, edge_index, batch_size=1000, cn_types=['in', 'out'
     return torch.stack(multi_type_scores), edge_index
 
 def evaluate_common_neighbors_large(train_edges, pos_test_edges, neg_test_edges, num_nodes):
-    """
-    Evaluate Common Neighbors heuristic with separate positive and negative test edges.
-    Returns AUC scores for in, out, and undirected versions.
-    
-    Parameters:
-    -----------
-    train_edges : torch.Tensor
-        Training edges, shape [2, num_train_edges]
-    pos_test_edges : torch.Tensor
-        Positive test edges, shape [2, num_pos_test]
-    neg_test_edges : torch.Tensor
-        Negative test edges, shape [2, num_neg_test]
-    num_nodes : int
-        Number of nodes in the graph
-    
-    Returns:
-    --------
-    dict: AUC scores for each CN type ('in', 'out', 'undirected')
-    """
+    """Updated evaluation function with both AUC and AP scores"""
     # Create sparse adjacency matrix from training edges
     train_adj = ssp.csr_matrix(
-        (np.ones(train_edges.size(1)), 
+        (np.ones(train_edges.size(1)),
          (train_edges[0].numpy(), train_edges[1].numpy())),
         shape=(num_nodes, num_nodes),
         dtype=np.float32)
-    
+
     # Combine positive and negative edges for processing
     test_edges = torch.cat([pos_test_edges, neg_test_edges], dim=1)
-    
+
     # Calculate CN scores for all types
     scores, _ = common_neighbors_large(
-        train_adj, 
-        test_edges, 
+        train_adj,
+        test_edges,
         batch_size=1000,
         cn_types=['in', 'out', 'undirected']
     )
-    
+
     # Create labels array (1 for positive edges, 0 for negative edges)
     labels = torch.zeros(pos_test_edges.size(1) + neg_test_edges.size(1))
     labels[:pos_test_edges.size(1)] = 1
     
-    # Calculate AUC scores for each type
-    results = {
-        'in': roc_auc_score(labels.numpy(), scores[0].numpy()),
-        'out': roc_auc_score(labels.numpy(), scores[1].numpy()),
-        'undirected': roc_auc_score(labels.numpy(), scores[2].numpy())
-    }
-    
+    # Calculate both AUC and AP scores for each type
+    results = {}
+    for idx, cn_type in enumerate(['in', 'out', 'undirected']):
+        scores_np = scores[idx].numpy()
+        labels_np = labels.numpy()
+        results[cn_type] = {
+            'auc': roc_auc_score(labels_np, scores_np),
+            'ap': average_precision_score(labels_np, scores_np)
+        }
+
     return results
 
+# Main execution
+if __name__ == "__main__":
+    print("Loading data...")
+    data = torch.load("appellate_graph_final.pt")
+    print(data)
+    
+    print("\nPerforming edge split...")
+    dataset = [data]
+    split_edge = do_edge_split(dataset, val_ratio=0.1, test_ratio=0.2, neg_ratio=1)
+    print(f"Train edges: {split_edge['train']['edge'].size(0)}")
 
-data = torch.load("appellate_graph_final.pt")
-print(data)
-dataset = [data]
-split_edge = do_edge_split(dataset, val_ratio=0.1, test_ratio=0.2, neg_ratio=1)
+    print("\nEvaluating Common Neighbors...")
+    results = evaluate_common_neighbors_large(
+        train_edges=split_edge["train"]["edge"].t(),
+        pos_test_edges=split_edge["test"]["edge"].t(),
+        neg_test_edges=split_edge["test"]["edge_neg"].t(),
+        num_nodes=data.num_nodes
+    )
 
-print(f"Train edges: {split_edge['train']['edge'].size(0)}")
-
-results = evaluate_common_neighbors_large(
-    train_edges=split_edge["train"]["edge"].t(),
-    pos_test_edges=split_edge["test"]["edge"].t(),
-    neg_test_edges=split_edge["test"]["edge_neg"].t(),
-    num_nodes=data.num_nodes
-)
-print("Common Neighbors AUC scores:")
-print(f"  In:        {results['in']:.4f}")
-print(f"  Out:       {results['out']:.4f}")
-print(f"  Undirected: {results['undirected']:.4f}")
+    print("\nCommon Neighbors scores:")
+    for cn_type in ['in', 'out', 'undirected']:
+        print(f"\n{cn_type.capitalize()} neighbors:")
+        print(f"  AUC: {results[cn_type]['auc']:.4f}")
+        print(f"  AP:  {results[cn_type]['ap']:.4f}")

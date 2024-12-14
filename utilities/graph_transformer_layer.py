@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import dgl
 import dgl.function as fn
 import numpy as np
+from tqdm import tqdm
 
 """
     Graph Transformer Layer
@@ -69,6 +70,8 @@ class MultiHeadAttentionLayer(nn.Module):
         self.num_heads = num_heads
         self.gamma = gamma
         self.full_graph=full_graph
+
+        self.normalizer = nn.LayerNorm(in_dim)
         
         if use_bias:
             self.Q = nn.Linear(in_dim, out_dim * num_heads, bias=True)
@@ -139,6 +142,8 @@ class MultiHeadAttentionLayer(nn.Module):
     
     def forward(self, g, h, e):
         
+        h = self.normalizer(h)
+
         Q_h = self.Q(h)
         K_h = self.K(h)
         E = self.E(e)
@@ -195,7 +200,7 @@ class GraphTransformerLayer(nn.Module):
             self.layer_norm1_h = nn.LayerNorm(out_dim)
             
         if self.batch_norm:
-            self.batch_norm1_h = nn.BatchNorm1d(out_dim)
+            self.batch_norm1_h = nn.BatchNorm1d(out_dim, eps=1e-5)
         
         # FFN for h
         self.FFN_h_layer1 = nn.Linear(out_dim, out_dim*2)
@@ -206,7 +211,7 @@ class GraphTransformerLayer(nn.Module):
             self.layer_norm2_h = nn.LayerNorm(out_dim)
             
         if self.batch_norm:
-            self.batch_norm2_h = nn.BatchNorm1d(out_dim)
+            self.batch_norm2_h = nn.BatchNorm1d(out_dim, eps=1e-5)
         
     def forward(self, g, h, e):
         h_in1 = h # for first residual connection

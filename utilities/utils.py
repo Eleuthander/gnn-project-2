@@ -391,9 +391,7 @@ def extract_enclosing_subgraphs_tensor(link_index, A_ssp: ssp.csr_matrix, A: tor
 
 def do_edge_split(dataset, fast_split=False, val_ratio=0.05, test_ratio=0.1, neg_ratio=1):
     data = dataset[0]
-    random.seed(234)
-    torch.manual_seed(234)
-
+    
     if not fast_split:
         transform = RandomLinkSplit(num_val=val_ratio, num_test=test_ratio, split_labels=True, neg_sampling_ratio=neg_ratio)
         train_data, val_data, test_data = transform(data)

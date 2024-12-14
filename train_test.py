@@ -1,17 +1,13 @@
 import torch
+from torch.nn import Linear
 from torch_geometric.loader import DataLoader as PygDataLoader
-from dataset import SEALDynamicDataset, SEALIterableDataset
-from utilities.utils import *
-from models import GCNGraphormer, SANGraphormer
 import argparse
 from types import SimpleNamespace
-from utilities.preprocess import preprocess
 import time
 from functools import partial
 from tqdm import tqdm
 import sys
-from torch.cuda.amp import autocast, GradScaler  # for mixed precision training
-import gc
+from torch.cuda.amp import autocast, GradScaler
 import os
 import numpy as np
 import pandas as pd
@@ -24,16 +20,19 @@ import GPUtil
 import psutil
 import logging
 from datetime import datetime
-from torch.nn import Linear
 
-CHECKPOINT_DIR = './checkpoints'
-METRICS_DIR = './metrics'
+from dataset import SEALDynamicDataset, SEALIterableDataset
+from utilities.utils import *
+from models import GCNGraphormer, SANGraphormer
+from utilities.preprocess import preprocess
 
-# Suppress annoying warnings; the deprecation warnings are ignorable since you are using an old version of torch
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning) # This is for a specific warning about optimizer and scheduler that was a false positive
+
+CHECKPOINT_DIR = './checkpoints'
+METRICS_DIR = './metrics'
 
 # ---------------------------
 # Logging Configuration
@@ -352,14 +351,14 @@ def init_weights(m, model, full_graph):
         if isinstance(m, Linear):
             if hasattr(m, 'final_layer') and m.final_layer:
                 # Xavier/Glorot initialization with larger gain for final layer
-                torch.nn.init.xavier_uniform_(m.weight, gain=1.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=0.85)
                 if m.bias is not None:
                     fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(m.weight)
                     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
                     torch.nn.init.uniform_(m.bias, -bound, bound)
             else:
                 # Standard Xavier/Glorot for other layers
-                torch.nn.init.xavier_uniform_(m.weight, gain=1.0)
+                torch.nn.init.xavier_uniform_(m.weight, gain=0.85)
                 if m.bias is not None:
                     torch.nn.init.zeros_(m.bias)
     elif model=='SANGraphormer' and not full_graph:
@@ -401,10 +400,11 @@ def main():
         model = 'SANGraphormer',  # either 'SANGraphormer' or 'GCNGraphormer'
         hidden_channels=64, # transformer block dims (32-64 reasonable) \ embedding dim in GCN (32-64 reasonable)
         num_layers=3, # 4 for SAN, 3 for GCN
-        dropout=0.2, # 0.7 for SAN, 0.3 for GCN
+        dropout=0.3, # 0.7 for SAN, 0.3 for GCN
         full_graph=False, # whether to add fake edges to SAN
-        layer_norm=True, # whether to implement layer norms in the SAN; batch norm always implemented
-        gamma=1e-7, # between 0 and 1:  0 is fully sparse, 1 fully connected (1e- through 1e- reasonable for this impl)
+        layer_norm=True, # whether to implement layer norms in the SAN
+        batch_norm=True, # whether to implement batch norms in the SAN
+        gamma=1e-10, # between 0 and 1:  0 is fully sparse, 1 fully connected (1e-10 through 1e-11 reasonable for this impl)
         GT_n_heads = 6, # Num heads for SAN module (3-6 reasonable)
         num_heads=4, # Num heads for graphormer module (4 used in SIEG)
 
@@ -445,7 +445,7 @@ def main():
         warmup_proportion=1.0, # what proportion of an epoch you want used for warmup
         T_0=1.0, # what proportion of an epoch you want for cosine period in scheduler
         weight_decay=1e-4,
-        num_epochs=5,
+        num_epochs=6,
         early_stopping_patience=6,  # Number of epochs to wait for improvement
     )
 
@@ -459,6 +459,7 @@ def main():
     parser.add_argument("--seed", type=int, default=args.dropout, help="Randomization replicator")
     parser.add_argument("--use_time_feature", action="store_false", default=args.use_time_feature, help="Use time_feature as PE in SAN")
     parser.add_argument("--num_epochs", type=int, default=args.num_epochs, help="Epochs")
+    parser.add_argument("--batch_norm", action="store_false", default=args.batch_norm, help="Use batch norms in SAN layers")
 
     parsed_args = parser.parse_args()
     for key, value in vars(parsed_args).items():
@@ -631,6 +632,7 @@ def main():
             GT_n_heads=args.GT_n_heads,
             full_graph=args.full_graph,
             layer_norm=args.layer_norm,
+            batch_norm=args.batch_norm,
             gamma=args.gamma
         ).to(device)
         logging.info("Model: SANGraphormer")

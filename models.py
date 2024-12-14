@@ -26,7 +26,7 @@ def abstract_pair_data(data, z_emb_pair=None):
 class SANGraphormer(torch.nn.Module):
     def __init__(self, args, hidden_channels, num_layers, max_z, num_features,
                  use_feature=False, use_feature_GT=True, use_time_feature=False, node_embedding=None, dropout = 0.5,
-                 GT_n_heads=4, full_graph=False, layer_norm=True, gamma=1e-5):
+                 GT_n_heads=4, full_graph=False, layer_norm=True, batch_norm=True, gamma=1e-5):
         super(SANGraphormer, self).__init__()
 
         # Original params
@@ -43,6 +43,7 @@ class SANGraphormer(torch.nn.Module):
         self.GT_n_heads = GT_n_heads
         self.full_graph = full_graph
         self.layer_norm = layer_norm
+        self.batch_norm = batch_norm
         self.gamma = gamma
         self.dropout = dropout
 
@@ -71,7 +72,7 @@ class SANGraphormer(torch.nn.Module):
             GraphTransformerLayer(
                 self.gamma, hidden_channels, hidden_channels, 
                 GT_n_heads, self.full_graph, dropout,
-                layer_norm=self.layer_norm, batch_norm=True
+                layer_norm=self.layer_norm, batch_norm=self.batch_norm
             ) for _ in range(num_layers)
         ])
 

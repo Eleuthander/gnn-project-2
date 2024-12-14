@@ -2,12 +2,11 @@
 
 ## Summary
 
-This is the code repository for my CPSC486 final project substituting replacing a GCN module with Kreuzer et al.'s[^1] SAN in Shi et al.'s[^2] SIEG architecture. 
+This is the code repository for my CPSC486 final project, which replaces a GCN module in Shi et al.'s[^2] SIEG architecture with Kreuzer et al.'s[^1] SAN. 
 
 Run `run_program.sh` to reproduce my results.
 
-
-The remaining folders and files in the repository are:
+The folders and files in the repository are:
 - `/checkpoints`: Stores model checkpoints from `train_test.py`.
 - `/logs`: Logs console output from `train_test.py`.
 - `/metrics`: Stores performance metrics for models from `train_test.py`.
@@ -22,11 +21,11 @@ The remaining folders and files in the repository are:
 - `models.py`: Contains the new SANGraphormer and takes GCNGraphormer from Shi et al.
 - `train_test.py`: Contains the train-test loop. 
 
-In the rest of this README I summarize the sieg architecture and then go through the key files in more detail.
+In the rest of this README I summarize the SIEG architecture and then go through the key files in more detail.
 
 ## SIEG Architecture
 
-The SIEG architecture is designed for link prediction. It calculates the k-hop neighborhoods of the two nodes and then passes them to two components. The first is a standard GNN. The second is a modified version of Graphormer that takes in various statistics about the notes, such as their Jacquard indices, the length of the shortest path between them, etc.
+The SIEG architecture is designed for link prediction. It calculates the k-hop neighborhoods of its target nodes and then passes them to two components. The first is a standard GNN. The second is a modified version of Graphormer that takes in various statistics about the notes, such as their Jacquard indices, the length of the shortest path between them, etc. The results of these two modules are concatenated to form a prediction.
 
 The baseline SIEG architecture uses a GCN for its GNN and is called "GCNGraphormer." I modify it to use a SAN instead, and so call it "SANGraphormer."
 
@@ -36,12 +35,12 @@ The baseline SIEG architecture uses a GCN for its GNN and is called "GCNGraphorm
 
 Kreuzer et al.'s code for SAN uses DGL graphs to take advantage of their efficient edge processing. SIEG, on the other hand, uses very efficient code on PyG graphs. To retain the efficiencies of both, I created a file that converts a batch of PyG graphs to on large DGL graph for processing by SAN.
 
-SAN has an option to fully connect the graphs in the batch. To make this as efficient as possible, I use vectorization to create a new edge_index for the fully conencted subgraphs in the batch. Then I assign edge features to the edges in teh original graph, using hashing to optimize the retrieval process for the original edges.
+SAN has an option to fully connect the graphs in the batch. To make this as efficient as possible, I use vectorization to create a new edge_index for the fully connected subgraphs in the batch. Then I assign edge features to the edges in the original graph, using hashing to optimize the retrieval process for the original edges.
 
 ### utils.py and preprocess.py
 
-These contains miscellaneous utilities for graph processing. For example:
-- SIEG uses DRNL node labelling to label nodes before passing them to the Graphormer, so `utils.py` contains a DRNL labeler. 
+These contain miscellaneous utilities for graph processing. For example:
+- SIEG uses DRNL node labeling to label nodes before passing them to the Graphormer, so `utils.py` contains a DRNL labeler. 
 - `utils.py` contains optimized utilities for retrieving the k-hop neighborhood of two target nodes for link prediction.
 - `utils.py` contains basic functions for splitting edges into training, validation, and test edges for use by the dataset classes in dataset.py.
 - `preprocess.py` takes in a subgraph and calculates various statistics between the target nodes to be fed to the Graphormer module.
@@ -54,13 +53,13 @@ I use SEALDynamicDataset, which processes the entire graph initially and creates
 
 ### models.py
 
-This file contains the model architectures. GCNGraphormer is taken from Shi et al., and processes the initial embeddings based on various initliaization arguments before passing them to the GCN layers, while the graphormer does its own predictions, and them the two results are combined.
+This file contains the model architectures. GCNGraphormer is taken from Shi et al., and processes the initial embeddings based on various initialization arguments before passing them to the GCN layer. The Graphormer does its own predictions, and then the two results are combined.
 
 SNAGraphormer is similar but replaces the GCN layers with transformer layers from graph_transformer_layer.py. 
 
 ### train_test.py
 
-
+A standard train-val-test pipeline. Logs are saved to `./logs`;  metrics for each epoch are saved to `./metrics`.
 
 ## References
 
